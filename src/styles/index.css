@@ -1,0 +1,262 @@
+/* ═══════════════════════════════════════════════════════════
+   ESTILOS GLOBALES - CRM
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Reset y Base ─── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #F9FAFB;
+}
+
+/* ─── Scrollbar Personalizado ─── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* ─── Override PrimeReact Theme con colores de marca ─── */
+:root {
+  --primary-color: #E31E24;
+  --primary-color-text: #ffffff;
+  --surface-ground: #F9FAFB;
+  --surface-section: #ffffff;
+  --surface-card: #ffffff;
+  --surface-overlay: #ffffff;
+  --surface-border: #E5E7EB;
+  --text-color: #1A1A1A;
+  --text-color-secondary: #6B7280;
+}
+
+/* ─── Botones PrimeReact ─── */
+.p-button {
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.p-button:active {
+  transform: translateY(0);
+}
+
+.p-button.p-button-outlined {
+  border-width: 1.5px;
+}
+
+/* ─── Botón de marca (rojo CRM) ─── */
+.btn-brand.p-button {
+  background: #E31E24 !important;
+  border-color: #E31E24 !important;
+  color: #fff !important;
+  border-radius: 10px;
+  padding: 10px 24px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(227, 30, 36, 0.25);
+}
+
+.btn-brand.p-button:hover {
+  background: #C41920 !important;
+  border-color: #C41920 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(227, 30, 36, 0.35);
+}
+
+.btn-brand.p-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(227, 30, 36, 0.25);
+}
+
+/* ─── Cards PrimeReact ─── */
+.p-card {
+  border-radius: 12px;
+  border: 1px solid #E5E7EB;
+}
+
+.p-card .p-card-body {
+  padding: 20px;
+}
+
+/* ─── Inputs PrimeReact ─── */
+.p-inputtext {
+  width: 100%;
+  border: 1px solid #D1D5DB;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  color: #1F2937;
+  background-color: #ffffff;
+  box-shadow: none;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.p-inputtext:hover {
+  border-color: #9CA3AF;
+}
+
+.p-inputtext:focus {
+  border-color: #E31E24 !important;
+  box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.12) !important;
+  outline: none !important;
+}
+
+.p-inputtext::placeholder {
+  color: #9CA3AF;
+  font-weight: 400;
+}
+
+/* ─── Dropdown PrimeReact ─── */
+.p-dropdown {
+  width: 100%;
+  border: 1px solid #D1D5DB;
+  border-radius: 10px;
+  background-color: #ffffff;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.p-dropdown .p-dropdown-label {
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  color: #1F2937;
+}
+
+.p-dropdown .p-dropdown-label.p-placeholder {
+  color: #9CA3AF;
+}
+
+.p-dropdown:not(.p-disabled):hover {
+  border-color: #9CA3AF;
+}
+
+.p-dropdown:not(.p-disabled).p-focus {
+  border-color: #E31E24 !important;
+  box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.12) !important;
+  outline: none;
+}
+
+.p-dropdown-panel {
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid #E5E7EB;
+}
+
+.p-dropdown-item {
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.p-dropdown-item:hover {
+  background-color: #FEF2F2 !important;
+  color: #E31E24 !important;
+}
+
+.p-dropdown-item.p-highlight {
+  background-color: #E31E24 !important;
+  color: white !important;
+}
+
+/* ─── Dialog PrimeReact ─── */
+.p-dialog {
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.p-dialog .p-dialog-header {
+  border-radius: 16px 16px 0 0;
+  padding: 24px 28px 16px;
+  border-bottom: none;
+}
+
+.p-dialog .p-dialog-content {
+  padding: 0 28px 8px;
+}
+
+.p-dialog .p-dialog-footer {
+  padding: 16px 28px 24px;
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+}
+
+/* ─── ProgressBar PrimeReact ─── */
+.p-progressbar {
+  border-radius: 4px;
+  background-color: #E5E7EB;
+}
+
+.p-progressbar .p-progressbar-value {
+  background: linear-gradient(90deg, #E31E24 0%, #C41920 100%);
+  border-radius: 4px;
+}
+
+/* ─── Tag PrimeReact ─── */
+.p-tag {
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* ─── Avatar PrimeReact ─── */
+.p-avatar {
+  font-weight: 700;
+}
+
+/* ─── Checkbox styling ─── */
+input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #E31E24;
+}
+
+/* ─── Transiciones suaves (solo inputs y cards) ─── */
+.p-inputtext,
+.p-dropdown,
+.p-card {
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ─── Utilidades adicionales ─── */
+.shadow-hover:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .p-dialog {
+    width: 95vw !important;
+    max-width: 95vw !important;
+  }
+}
