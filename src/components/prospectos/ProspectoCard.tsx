@@ -63,8 +63,8 @@ export const ProspectoCard: React.FC<ProspectoCardProps> = ({ prospecto, onEdit,
                             {prospecto.nombre}
                         </div>
                         {prospecto.empresa && (
-                            <div style={{ fontSize: '0.73rem', color: COLORS.gray500, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                                <i className="pi pi-building" style={{ fontSize: '0.65rem' }} />
+                            <div style={{ fontSize: '0.73rem', color: COLORS.gray500, display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                                <i className="pi pi-building mr-1" style={{ fontSize: '0.65rem' }} />
                                 {prospecto.empresa}
                             </div>
                         )}
@@ -102,14 +102,14 @@ export const ProspectoCard: React.FC<ProspectoCardProps> = ({ prospecto, onEdit,
             </div>
 
             {/* Email */}
-            <div style={{ fontSize: '0.76rem', color: COLORS.gray500, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <i className="pi pi-envelope" style={{ fontSize: '0.7rem', color: COLORS.gray400 }} />
+            <div style={{ fontSize: '0.76rem', color: COLORS.gray500, display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                <i className="pi pi-envelope mr-1" style={{ fontSize: '0.7rem', color: COLORS.gray400 }} />
                 {prospecto.email}
             </div>
 
             {/* Teléfono */}
-            <div style={{ fontSize: '0.76rem', color: COLORS.gray500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <i className="pi pi-phone" style={{ fontSize: '0.7rem', color: COLORS.gray400 }} />
+            <div style={{ fontSize: '0.76rem', color: COLORS.gray500, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <i className="pi pi-phone mr-1" style={{ fontSize: '0.7rem', color: COLORS.gray400 }} />
                 {prospecto.telefono}
             </div>
         </div>

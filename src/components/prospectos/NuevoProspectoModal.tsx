@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
+import { Dropdown } from 'primereact/dropdown';
+import { useAuth } from '@/hooks';
 import { COLORS } from '@/utils/constants';
 import { FormField, ModalSectionHeader } from '@/components/ui';
+import { apiGetUsersByRole, UsuarioAPI } from '@/services/api';
 
 // ═══════════════════════════════════════════════════════════
 // TIPO DEL FORM
@@ -18,6 +21,9 @@ export interface NuevoProspectoForm {
     telefono: string;
     celular: string;
     ciudad: string;
+    etapa: string;
+    producto: string;
+    user_create_id?: number | string;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -31,6 +37,9 @@ interface Props {
 }
 
 export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }) => {
+    const { user } = useAuth();
+    const isJefe = user?.rol === 'Jefe Comercial' || user?.rol === 'jefe';
+
     const initialState: NuevoProspectoForm = {
         nombre: '',
         apellido: '',
@@ -40,20 +49,43 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
         telefono: '',
         celular: '',
         ciudad: '',
+        etapa: 'ATENCION',
+        producto: 'Vehículo',
+        user_create_id: '',
     };
 
     const [form, setForm] = useState<NuevoProspectoForm>(initialState);
+    const [usuarios, setUsuarios] = useState<UsuarioAPI[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
 
-    const set = (field: keyof NuevoProspectoForm, value: string) => {
+    useEffect(() => {
+        if (visible && isJefe) {
+            setLoadingUsers(true);
+            apiGetUsersByRole('Agente Comercial')
+                .then(data => setUsuarios(data))
+                .catch(err => console.error("Error fetching agents", err))
+                .finally(() => setLoadingUsers(false));
+        }
+    }, [visible, isJefe]);
+
+    const set = (field: keyof NuevoProspectoForm, value: string | number) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
     const handleSubmit = () => {
-        if (!form.nombre || !form.email || !form.telefono) {
-            alert('Por favor complete los campos obligatorios: Nombre, Email y Teléfono');
+        if (!form.nombre || !form.email || !form.telefono || !form.producto) {
+            alert('Por favor complete los campos obligatorios: Nombre, Email, Teléfono y Categoría');
             return;
         }
-        onSave(form);
+
+        // Si es jefe y eligió un agente, enviamos ese user_create_id.
+        // Si es agente, enviamos su propio ID (esto ya estaba en el plan previo).
+        const finalUserId = isJefe ? (form.user_create_id || user?.id) : user?.id;
+
+        onSave({
+            ...form,
+            user_create_id: finalUserId
+        });
         setForm(initialState);
     };
 
@@ -175,6 +207,49 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
                     </FormField>
                 </div>
             </div>
+
+            {/* ── Interés Comercial ── */}
+            <ModalSectionHeader icon="pi-shopping-cart" title="Interés Comercial" />
+            <div className="grid" style={{ rowGap: '4px' }}>
+                <div className="col-12">
+                    <FormField label="Categoría de Interés" required>
+                        <Dropdown
+                            value={form.producto}
+                            options={[
+                                { label: '🚗 Vehículo', value: 'Vehículo' },
+                                { label: '🏠 Vivienda', value: 'Vivienda' }
+                            ]}
+                            onChange={(e) => set('producto', e.value)}
+                            placeholder="Seleccione categoría"
+                        />
+                    </FormField>
+                </div>
+            </div>
+
+            {/* ── Asignación (Solo Jefe) ── */}
+            {isJefe && (
+                <>
+                    <ModalSectionHeader icon="pi-users" title="Asignación" />
+                    <div className="grid" style={{ rowGap: '4px' }}>
+                        <div className="col-12">
+                            <FormField label="Agente Comercial">
+                                <Dropdown
+                                    value={form.user_create_id}
+                                    options={usuarios.map(u => ({
+                                        label: `${u.nombres} ${u.apellidos} `,
+                                        value: u.userID
+                                    }))}
+                                    onChange={(e) => set('user_create_id', e.value)}
+                                    placeholder={loadingUsers ? 'Cargando agentes...' : 'Seleccione un agente comercial'}
+                                    filter
+                                    filterBy="label"
+                                    showClear
+                                />
+                            </FormField>
+                        </div>
+                    </div>
+                </>
+            )}
         </Dialog>
     );
 };

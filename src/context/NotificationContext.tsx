@@ -60,9 +60,55 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
                 position="top-right"
                 style={{ zIndex: 9999 }}
                 pt={{
-                    root: { style: { minWidth: '280px', maxWidth: '380px' } },
-                    message: { style: { gap: '8px' } },
-                    detail: { style: { fontSize: '0.88rem', lineHeight: 1.4 } },
+                    root: {
+                        style: {
+                            minWidth: '320px',
+                            maxWidth: '420px',
+                        }
+                    },
+                    message: {
+                        style: {
+                            borderRadius: '16px',
+                            boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                            border: 'none',
+                            marginBottom: '12px',
+                            backdropFilter: 'blur(10px)',
+                        }
+                    },
+                    content: {
+                        style: {
+                            padding: '16px 20px',
+                            alignItems: 'center',
+                        }
+                    },
+                    icon: {
+                        style: {
+                            fontSize: '1.4rem',
+                            marginRight: '12px',
+                        }
+                    },
+                    summary: {
+                        style: {
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            marginBottom: '2px',
+                        }
+                    },
+                    detail: {
+                        style: {
+                            fontSize: '0.86rem',
+                            fontWeight: 500,
+                            lineHeight: 1.5,
+                            opacity: 0.9,
+                        }
+                    },
+                    closeButton: {
+                        style: {
+                            width: '24px',
+                            height: '24px',
+                            marginLeft: '12px',
+                        }
+                    }
                 }}
             />
             {children}

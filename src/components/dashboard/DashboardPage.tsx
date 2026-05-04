@@ -1,28 +1,34 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from 'primereact/card';
 import { Dropdown } from 'primereact/dropdown';
 import {
   KPICard,
   SectionTitle,
+  PageHeader,
+  EmptyState,
   Avatar,
   CustomBadge,
-  PageHeader,
-  EmptyState
+  IconBox
 } from '@/components/ui';
-import { useFilters, useFilteredData, useKPIs, useAIDAFunnel } from '@/hooks';
-import { AGENTES } from '@/data/sampleData';
+import { useFilters, useFilteredData, useKPIs, useAIDAFunnel, useAuth, useDashboardIndices, useForecast, useDashboardJefeDetails } from '@/hooks';
+import { AgentPerformanceCard } from './AgentPerformanceCard';
+import { apiGetUsersByRole, UsuarioAPI } from '@/services/api';
 import { COLORS, MESES_NOMBRES, ETAPA_COLORS, PRIORIDAD_COLORS, TIPO_TAREA_ICONS } from '@/utils/constants';
-import { PageKey, Tarea, Oportunidad } from '@/types';
+import { formatUserDisplayName } from '@/utils/formatters';
+import { Tarea, Oportunidad } from '@/types';
 
 // ═══════════════════════════════════════════════════════════
 // DASHBOARD PAGE
 // ═══════════════════════════════════════════════════════════
 
-interface DashboardPageProps {
-  setActive: (page: PageKey) => void;
-}
+export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente';
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
+
+
   const {
     selectedMes,
     setSelectedMes,
@@ -33,9 +39,42 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
     mesActual,
   } = useFilters();
 
+  // Si es agente, forzar el filtro a su propio nombre (o 'Todos' si usamos la lógica de fetchId)
+  // Pero useFilters está acoplado a strings de nombres.
+  // En useFilteredData, si agente !== 'Todos' hace filter.
+  // Sin embargo, useProspectos y useOportunidades ya filtran por API si detectan rol agente.
+  // Así que si soy agente, 'Todos' en el frontend ya significa 'Todos MIS datos'.
+  // Por lo tanto, lo mejor es ocultar el selector de agentes.
+
+  useEffect(() => {
+    if (!isPrivileged) {
+      setSelectedAgente('Todos');
+    }
+  }, [isPrivileged, setSelectedAgente]);
+
+  // Agentes Reales
+  const [agentes, setAgentes] = React.useState<UsuarioAPI[]>([]);
+  useEffect(() => {
+    if (isPrivileged) {
+      apiGetUsersByRole('Agente Comercial')
+        .then(setAgentes)
+        .catch(console.error);
+    }
+  }, [isPrivileged]);
+
+  // Buscar el userId si el agente seleccionado no es "Todos"
+  const selectedAgentUser = agentes.find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
+
   const { prospectosFiltrados, oportunidadesFiltradas, tareasFiltradas } = useFilteredData({
     mes: selectedMes,
     agente: selectedAgente,
+    userId: selectedAgentUser?.userID
+  });
+
+  const { indices: dynamicKPIs, loading: loadingIndices } = useDashboardIndices({
+    mes: selectedMes,
+    anio: new Date().getFullYear().toString(),
+    userId: selectedAgentUser?.userID
   });
 
   const kpis = useKPIs({
@@ -45,47 +84,123 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
 
   const aidaFunnel = useAIDAFunnel(prospectosFiltrados);
 
+  const currentAnio = new Date().getFullYear().toString();
+  const { metas: agentGoals, allMetas } = useForecast({
+    userId: selectedAgentUser?.userID,
+    mes: selectedMes,
+    anio: currentAnio
+  });
+
+  const { details: jefeDetails } = useDashboardJefeDetails({
+    mes: selectedMes,
+    anio: currentAnio
+  });
+
+  const performanceMetrics = useMemo(() => {
+    if (!isPrivileged) return null;
+
+    // Helper para mapear el item de la API al formato de la tarjeta
+    const mapToCard = (item: any) => ({
+      agentName: item.nombre,
+      revenue: {
+        current: item.real.ingresos,
+        target: typeof item.forecast?.metaIngresos === 'string' ? parseFloat(item.forecast.metaIngresos) : (item.forecast?.metaIngresos || 0)
+      },
+      tasks: item.totalTareasPendientes,
+      prospects: { current: item.real.prospectos, target: item.forecast?.metaProspectos || 0 },
+      opportunities: { current: item.real.oportunidades, target: item.forecast?.metaOportunidades || 0 },
+      closings: { current: item.real.cierres, target: item.forecast?.metaCierres || 0 },
+      winOpps: item.real.ganadas,
+      lostOpps: item.real.perdidas
+    });
+
+    // 1. Vista Global (Grilla de agentes) - Solo para Jefe/Admin
+    if (isPrivileged && selectedAgente === 'Todos' && jefeDetails.length > 0) {
+      // Filtramos para que NO aparezca el Jefe Comercial en la grilla
+      const agentIds = new Set(agentes.map(a => a.userID));
+      return {
+        isBatch: true,
+        data: jefeDetails
+          .filter(item => agentIds.has(item.agenteId) && item.nombre !== 'Jefe Comercial')
+          .map(item => mapToCard(item))
+      };
+    }
+
+    // 2. Vista Individual (Filtro específico o Agente viendo su propio dashboard)
+    const searchId = selectedAgentUser?.userID || (!isPrivileged ? user?.id : null);
+    if (searchId) {
+      // Intentamos buscar en jefeDetails (si falló o no cargó, usamos fallback local)
+      const myDetail = jefeDetails.find(d => d.agenteId === searchId);
+      if (myDetail) {
+        return {
+          isBatch: false,
+          data: [mapToCard(myDetail)]
+        };
+      }
+
+      // Fallback local para vista individual
+      const revActual = oportunidadesFiltradas
+        .filter(o => o.etapa === 'Cierre' || (o as any).estado === 'Cierre' || o.etapa === 'Ganada')
+        .reduce((acc, o) => acc + (o.valor || 0), 0);
+
+      const targetName = selectedAgentUser ? formatUserDisplayName(selectedAgentUser.nombres, selectedAgentUser.apellidos) : formatUserDisplayName(user?.nombres || '', user?.apellidos || '');
+
+      return {
+        isBatch: false,
+        data: [{
+          agentName: targetName,
+          revenue: { current: revActual, target: agentGoals?.metaIngresos || 0 },
+          tasks: tareasFiltradas.filter(t => !t.completada).length,
+          prospects: { current: prospectosFiltrados.length, target: agentGoals?.metaProspectos || 0 },
+          opportunities: { current: oportunidadesFiltradas.length, target: agentGoals?.metaOportunidades || 0 },
+          closings: { current: oportunidadesFiltradas.filter(o => o.etapa === 'Cierre' || (o as any).estado === 'Cierre' || o.etapa === 'Ganada').length, target: agentGoals?.metaCierres || 0 },
+          winOpps: oportunidadesFiltradas.filter(o => o.etapa === 'Ganada').length,
+          lostOpps: oportunidadesFiltradas.filter(o => o.etapa === 'Perdida').length
+        }]
+      };
+    }
+
+    return null;
+  }, [isPrivileged, selectedAgente, selectedAgentUser, agentGoals, allMetas, prospectosFiltrados, oportunidadesFiltradas, tareasFiltradas, agentes, jefeDetails, user]);
+
   // Opciones para dropdowns
   const mesesDisponibles = MESES_NOMBRES.slice(0, mesActual + 1).map((mes, i) => ({
-    label: `${mes} 2026`,
+    label: `${mes} ${new Date().getFullYear()}`,
     value: i,
   }));
 
   const agentesOptions = [
     { label: 'Todos los agentes', value: 'Todos' },
-    ...AGENTES.filter(a => a.activo).map(a => ({ label: a.nombre, value: a.nombre })),
+    ...agentes.map(a => {
+      const name = formatUserDisplayName(a.nombres, a.apellidos);
+      return { label: name, value: name };
+    }),
   ];
+
+  const isJefeComercial = user?.rol === 'Jefe Comercial';
 
   return (
     <div>
       {/* Header con filtros */}
       <PageHeader title="Dashboard" subtitle="Resumen de tu actividad comercial">
         <div className="flex gap-2 align-items-center flex-wrap">
-          {/* Filtro Agente */}
-          <div className="flex align-items-center gap-2">
-            <div
-              className="flex align-items-center justify-content-center border-round-lg"
-              style={{ width: '32px', height: '32px', backgroundColor: COLORS.redLight }}
-            >
-              <i className="pi pi-users" style={{ color: COLORS.red, fontSize: '0.9rem' }} />
+          {/* Filtro Agente - SOLO PARA JEFE COMERCIAL */}
+          {isJefeComercial && (
+            <div className="flex align-items-center gap-2">
+              <IconBox icon="pi-users" color={COLORS.red} bg={COLORS.redLight} />
+              <Dropdown
+                value={selectedAgente}
+                options={agentesOptions}
+                onChange={(e) => setSelectedAgente(e.value)}
+                className="w-12rem"
+                placeholder="Seleccionar agente"
+              />
             </div>
-            <Dropdown
-              value={selectedAgente}
-              options={agentesOptions}
-              onChange={(e) => setSelectedAgente(e.value)}
-              className="w-12rem"
-              placeholder="Seleccionar agente"
-            />
-          </div>
+          )}
 
           {/* Filtro Mes */}
           <div className="flex align-items-center gap-2">
-            <div
-              className="flex align-items-center justify-content-center border-round-lg"
-              style={{ width: '32px', height: '32px', backgroundColor: COLORS.blueLight }}
-            >
-              <i className="pi pi-calendar" style={{ color: COLORS.blue, fontSize: '0.9rem' }} />
-            </div>
+            <IconBox icon="pi-calendar" color={COLORS.blue} bg={COLORS.blueLight} />
             <Dropdown
               value={selectedMes}
               options={mesesDisponibles}
@@ -101,11 +216,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
       <div className="flex gap-2 mb-4 flex-wrap align-items-center">
         <span className="text-xs text-400">Mostrando:</span>
         <CustomBadge color={COLORS.red} bg={COLORS.redLight}>
-          {MESES_NOMBRES[selectedMes]} 2026
+          {MESES_NOMBRES[selectedMes]} {new Date().getFullYear()}
         </CustomBadge>
-        <CustomBadge color={COLORS.blue} bg={COLORS.blueLight}>
-          {selectedAgente === 'Todos' ? 'Todos los agentes' : selectedAgente}
-        </CustomBadge>
+        {isJefeComercial && (
+          <CustomBadge color={COLORS.blue} bg={COLORS.blueLight}>
+            {selectedAgente === 'Todos' ? 'Todos los agentes' : selectedAgente}
+          </CustomBadge>
+        )}
         {hasActiveFilters && (
           <button
             onClick={resetFilters}
@@ -118,32 +235,32 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
       </div>
 
       {/* KPIs */}
-      <div className="flex gap-3 mb-4 flex-wrap">
+      <div className="kpi-cards-grid">
         <KPICard
           icon="pi-sync"
           label="PRODUCCIÓN"
-          value={`${kpis.produccion}%`}
-          sub={`${kpis.totalProspectos} de ${kpis.planificadas} planificadas`}
-          trend={Number(kpis.produccion) > 15 ? 'up' : 'neutral'}
-          trendLabel={Number(kpis.produccion) > 15 ? 'Buen ritmo' : 'En progreso'}
+          value={loadingIndices ? '...' : `${dynamicKPIs?.kpi_produccion?.ratio || 0}% `}
+          sub={`${dynamicKPIs?.kpi_produccion?.cantidad_prospectos_creados || 0} de ${dynamicKPIs?.kpi_produccion?.cantidad_prospectos_planificados || 0} planificadas`}
+          trend={Number(dynamicKPIs?.kpi_produccion?.ratio || 0) > 15 ? 'up' : 'neutral'}
+          trendLabel={Number(dynamicKPIs?.kpi_produccion?.ratio || 0) > 15 ? 'Buen ritmo' : 'En progreso'}
           color={COLORS.red}
         />
         <KPICard
           icon="pi-check-circle"
           label="EFICACIA"
-          value={`${kpis.eficacia}%`}
-          sub={`${kpis.ganadas} cerradas de ${kpis.totalOps}`}
-          trend={Number(kpis.eficacia) > 25 ? 'up' : 'down'}
-          trendLabel={`${kpis.ganadas} ganadas`}
+          value={loadingIndices ? '...' : `${dynamicKPIs?.kpi_eficacia?.ratio || 0}% `}
+          sub={`${dynamicKPIs?.kpi_eficacia?.cantidad_oportunidades_cerradas || 0} cerradas de ${dynamicKPIs?.kpi_eficacia?.cantidad_oportunidades_creadas || 0} `}
+          trend={Number(dynamicKPIs?.kpi_eficacia?.ratio || 0) > 25 ? 'up' : 'down'}
+          trendLabel={`${dynamicKPIs?.kpi_eficacia?.cantidad_oportunidades_ganadas || 0} ganadas`}
           color={COLORS.green}
         />
         <KPICard
           icon="pi-dollar"
           label="CONTRIBUCIÓN"
-          value={`${kpis.contribucion}%`}
-          sub={`$${kpis.totalGanado.toLocaleString()} en ingresos`}
-          trend={kpis.totalGanado > 0 ? 'up' : 'neutral'}
-          trendLabel={`$${kpis.totalGanado.toLocaleString()}`}
+          value={loadingIndices ? '...' : `${dynamicKPIs?.kpi_contribucion?.ratio || 0}% `}
+          sub={`$${(dynamicKPIs?.kpi_contribucion?.total_ingresos || 0).toLocaleString()} en ingresos`}
+          trend={(dynamicKPIs?.kpi_contribucion?.total_ingresos || 0) > 0 ? 'up' : 'neutral'}
+          trendLabel={`$${(dynamicKPIs?.kpi_contribucion?.meta_ingresos || 0).toLocaleString()} `}
           color={COLORS.blue}
         />
         <KPICard
@@ -157,15 +274,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
         />
       </div>
 
-      <div className="flex gap-4 flex-wrap">
+      <div className="dashboard-columns">
         {/* Left Column */}
-        <div className="flex-grow-1" style={{ minWidth: '400px', flex: 2 }}>
+        <div className="dashboard-col-main">
           {/* Embudo AIDA */}
           <Card className="mb-3 shadow-1">
             <SectionTitle
               icon="pi-chart-bar"
               title="Embudo AIDA"
-              action={() => setActive('prospectos')}
+              action={() => navigate('/prospectos')}
               actionLabel="Ver todos"
             />
             {prospectosFiltrados.length === 0 ? (
@@ -192,44 +309,63 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
             )}
           </Card>
 
-          {/* Oportunidades Recientes */}
-          <Card className="shadow-1">
-            <SectionTitle
-              icon="pi-sync"
-              title="Oportunidades Recientes"
-              action={() => setActive('oportunidades')}
-              actionLabel="Ver todas"
-            />
-            {oportunidadesFiltradas.length === 0 ? (
-              <EmptyState message="No hay oportunidades para este período" />
-            ) : (
-              oportunidadesFiltradas.map((op: Oportunidad) => (
-                <div
-                  key={op.id}
-                  className="flex align-items-center justify-content-between py-3 border-bottom-1"
-                  style={{ borderColor: COLORS.gray100 }}
-                >
-                  <div className="flex align-items-center gap-3">
-                    <Avatar name={op.cliente} />
-                    <div>
-                      <div className="font-semibold text-900">{op.nombre}</div>
-                      <div className="text-sm text-500">{op.cliente}</div>
+          {/* Contenido Principal: Grilla o Lista */}
+          {isPrivileged && performanceMetrics && (
+            <div className="grid mb-4">
+              {performanceMetrics.data.map((item, idx) => (
+                <div key={idx} className={`col-12 ${performanceMetrics.isBatch ? 'md:col-6' : ''}`}>
+                  <AgentPerformanceCard
+                    agentName={item.agentName}
+                    revenue={item.revenue}
+                    tasks={item.tasks}
+                    prospects={item.prospects}
+                    opportunities={item.opportunities}
+                    closings={item.closings}
+                    winOpps={item.winOpps}
+                    lostOpps={item.lostOpps}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!isPrivileged && (
+            /* Oportunidades Recientes - SOLO PARA AGENTES */
+            <Card className="shadow-1">
+              <SectionTitle
+                icon="pi-sync"
+                title="Oportunidades Recientes"
+                action={() => navigate('/oportunidades')}
+                actionLabel="Ver todas"
+              />
+              {oportunidadesFiltradas.length === 0 ? (
+                <EmptyState message="No hay oportunidades para este período" />
+              ) : (
+                oportunidadesFiltradas.slice(0, 10).map((op: Oportunidad) => (
+                  <div
+                    key={op.id}
+                    className="flex align-items-center justify-content-between py-2 border-bottom-1"
+                    style={{ borderColor: COLORS.gray100 }}
+                  >
+                    <div className="flex align-items-center gap-3" style={{ flex: 1, minWidth: 0 }}>
+                      <Avatar name={op.cliente} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="font-semibold text-900" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.nombre}</div>
+                        <div className="text-sm text-500" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{op.cliente}</div>
+                      </div>
+                    </div>
+                    <div className="flex align-items-center gap-3" style={{ flexShrink: 0, marginLeft: '12px' }}>
+                      <span className="font-bold text-900" style={{ whiteSpace: 'nowrap' }}>${op.valor.toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="flex align-items-center gap-3">
-                    <span className="font-bold text-900">${op.valor.toLocaleString()}</span>
-                    <CustomBadge color={op.color} bg={`${op.color}18`}>
-                      {op.etapa}
-                    </CustomBadge>
-                  </div>
-                </div>
-              ))
-            )}
-          </Card>
+                ))
+              )}
+            </Card>
+          )}
         </div>
 
         {/* Right Column */}
-        <div className="flex-grow-1" style={{ minWidth: '280px', flex: 1 }}>
+        <div className="dashboard-col-side">
           {/* Tareas Pendientes */}
           <Card className="mb-3 shadow-1">
             <SectionTitle
@@ -240,7 +376,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
             {tareasFiltradas.length === 0 ? (
               <EmptyState message="No hay tareas para este período" />
             ) : (
-              tareasFiltradas.map((tarea: Tarea) => (
+              tareasFiltradas.slice(0, 3).map((tarea: Tarea) => (
                 <div
                   key={tarea.id}
                   className="flex align-items-start gap-2 py-2 border-bottom-1"
@@ -250,7 +386,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
                   <div className="flex-1">
                     <div className="flex align-items-center gap-2">
                       <i
-                        className={`pi ${TIPO_TAREA_ICONS[tarea.tipo]}`}
+                        className={`pi ${TIPO_TAREA_ICONS[tarea.tipo]} `}
                         style={{
                           fontSize: '0.85rem',
                           color: tarea.tipo === 'llamada' ? COLORS.blue :
@@ -275,7 +411,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
               ))
             )}
             <button
-              onClick={() => setActive('tareas')}
+              onClick={() => navigate('/tareas')}
               className="w-full flex align-items-center justify-content-center gap-1 mt-3 py-2 bg-transparent border-none cursor-pointer text-sm font-semibold"
               style={{ color: COLORS.red }}
             >
@@ -288,15 +424,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
             <SectionTitle
               icon="pi-calendar"
               title="Calendario"
-              badge={`${MESES_NOMBRES[selectedMes]} 2026`}
+              badge={`${MESES_NOMBRES[selectedMes]} ${new Date().getFullYear()}`}
             />
-            <MiniCalendar />
+            <MiniCalendar selectedMonth={selectedMes} />
             <div className="mt-3 pt-2 border-top-1" style={{ borderColor: COLORS.gray100 }}>
-              <div className="text-sm font-semibold text-600">lunes 2 de febrero</div>
-              <div className="text-xs text-400 mt-1">Sin actividades programadas</div>
+              <div className="text-sm font-semibold text-600">
+                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </div>
+              {tareasFiltradas.filter(t => {
+                const d = new Date(t.fecha);
+                const todayRef = new Date();
+                return d.getDate() === todayRef.getDate() && d.getMonth() === todayRef.getMonth() && d.getFullYear() === todayRef.getFullYear();
+              }).length === 0 && (
+                  <div className="text-xs text-400 mt-1">Sin actividades programadas</div>
+                )}
             </div>
             <button
-              onClick={() => setActive('actividades')}
+              onClick={() => navigate('/actividades')}
               className="w-full flex align-items-center justify-content-center gap-1 mt-2 py-2 bg-transparent border-none cursor-pointer text-sm font-semibold"
               style={{ color: COLORS.red }}
             >
@@ -310,40 +454,78 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActive }) => {
 };
 
 // ─── Mini Calendar Component ───
-const MiniCalendar: React.FC = () => {
-  const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-  const prevDays = [26, 27, 28, 29, 30, 31, 1];
-  const rows = [[2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15], [16, 17, 18, 19, 20, 21, 22], [23, 24, 25, 26, 27, 28, 0]];
+interface MiniCalendarProps {
+  selectedMonth: number;
+}
+
+const MiniCalendar: React.FC<MiniCalendarProps> = ({ selectedMonth }) => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const today = now.getDate();
+  const isCurrentMonth = now.getMonth() === selectedMonth;
+
+  const daysLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+  const firstDayOfMonth = new Date(year, selectedMonth, 1);
+  const lastDayOfMonth = new Date(year, selectedMonth + 1, 0);
+
+  // getDay(): 0=Dom, 1=Lun...
+  let startingDay = firstDayOfMonth.getDay();
+  if (startingDay === 0) startingDay = 7; // Ajustar a Lunes como 1
+
+  const daysArray: { day: number, isCurrentMonth: boolean }[] = [];
+
+  // Días del mes anterior
+  const prevMonthLastDay = new Date(year, selectedMonth, 0).getDate();
+  for (let i = startingDay - 1; i > 0; i--) {
+    daysArray.push({ day: prevMonthLastDay - i + 1, isCurrentMonth: false });
+  }
+
+  // Días del mes actual
+  for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
+    daysArray.push({ day: i, isCurrentMonth: true });
+  }
+
+  // Días del mes siguiente para completar la grilla
+  const totalSlots = 42;
+  const nextMonthDays = totalSlots - daysArray.length;
+  for (let i = 1; i <= nextMonthDays; i++) {
+    daysArray.push({ day: i, isCurrentMonth: false });
+  }
 
   return (
-    <div className="grid" style={{ gap: '2px' }}>
-      {days.map(d => (
-        <div key={d} className="col text-center text-xs text-400 font-semibold p-1">
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(7, 1fr)',
+        gap: '2px',
+        marginTop: '1rem'
+      }}
+    >
+      {daysLabels.map(d => (
+        <div key={d} className="text-center text-xs text-500 font-bold p-1">
           {d}
         </div>
       ))}
-      {prevDays.map((d, i) => (
-        <div
-          key={`p${i}`}
-          className="col text-center text-sm p-2 border-round"
-          style={{
-            color: d > 7 ? COLORS.gray300 : d === 2 ? COLORS.white : COLORS.gray700,
-            backgroundColor: d === 2 ? COLORS.red : 'transparent',
-            fontWeight: d === 2 ? 700 : 400
-          }}
-        >
-          {d}
-        </div>
-      ))}
-      {rows.flat().map((d, i) => (
-        <div
-          key={`d${i}`}
-          className="col text-center text-sm p-2 border-round"
-          style={{ color: d === 0 ? 'transparent' : COLORS.gray700 }}
-        >
-          {d || ''}
-        </div>
-      ))}
+      {daysArray.map((dObj, i) => {
+        const isToday = dObj.isCurrentMonth && isCurrentMonth && dObj.day === today;
+        return (
+          <div
+            key={i}
+            className="text-center text-xs p-2 border-round flex align-items-center justify-content-center"
+            style={{
+              height: '32px',
+              color: !dObj.isCurrentMonth ? COLORS.gray300 : (isToday ? COLORS.white : COLORS.gray700),
+              backgroundColor: isToday ? COLORS.red : 'transparent',
+              fontWeight: isToday ? 700 : 500,
+              cursor: 'default',
+              transition: 'all 0.2s'
+            }}
+          >
+            {dObj.day}
+          </div>
+        );
+      })}
     </div>
   );
 };

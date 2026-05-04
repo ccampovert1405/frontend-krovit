@@ -4,4 +4,5 @@ export {
     apiCreateOportunidad as createOportunidad,
     apiUpdateOportunidad as updateOportunidad,
     apiDeleteOportunidad as deleteOportunidad,
+    apiGetPlanFinanciero as getPlanFinanciero,
 } from '@/services/api';

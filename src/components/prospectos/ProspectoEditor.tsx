@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
-import { COLORS, ETAPAS_AIDA, ETAPA_COLORS } from '@/utils/constants';
+import { Calendar } from 'primereact/calendar';
+import { COLORS, ETAPAS_AIDA } from '@/utils/constants';
 import { Prospecto, EtapaAIDA } from '@/types';
 import { FormField, ModalSectionHeader } from '@/components/ui';
+import { apiGetUsersByRole, UsuarioAPI } from '@/services/api';
+import { useAuth } from '@/hooks';
 
 // ═══════════════════════════════════════════════════════════
 // TIPO DEL FORM
@@ -21,6 +24,9 @@ interface EditarProspectoFullForm {
     celular: string;
     ciudad: string;
     etapa: EtapaAIDA;
+    producto: string;
+    user_create_id: number | string;
+    created_at: string;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -35,7 +41,26 @@ interface EditarProspectoModalProps {
 }
 
 export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ prospecto, visible, onHide, onSave }) => {
+    const { user } = useAuth();
+    const isJefe = user?.rol === 'Jefe Comercial' || user?.rol === 'jefe' || user?.rol === 'Administrador' || user?.rol === 'Admin';
+
+    console.log(isJefe)
+
     const etapaOptions = ETAPAS_AIDA.map(e => ({ label: e, value: e }));
+
+    const [usuarios, setUsuarios] = useState<UsuarioAPI[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+
+    useEffect(() => {
+        if (visible && isJefe) {
+            setLoadingUsers(true);
+            // Si es jefe/admin, podemos ver todos los usuarios para asignar
+            apiGetUsersByRole('Agente Comercial')
+                .then(setUsuarios)
+                .catch(err => console.error("Error fetching users", err))
+                .finally(() => setLoadingUsers(false));
+        }
+    }, [visible, isJefe]);
 
     // Separar nombre completo en nombre y apellido
     const partes = (prospecto.nombre || '').split(' ');
@@ -52,9 +77,12 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
         celular: prospecto.celular || '',
         ciudad: prospecto.ciudad || '',
         etapa: prospecto.etapa,
+        producto: prospecto.producto || 'Vehículo',
+        user_create_id: prospecto.user_create_id || prospecto.user_create?.userID || '',
+        created_at: prospecto.created_at ? prospecto.created_at.split('T')[0] : '',
     });
 
-    const set = (field: keyof EditarProspectoFullForm, value: string) => {
+    const set = (field: keyof EditarProspectoFullForm, value: any) => {
         setForm(prev => ({ ...prev, [field]: value }));
     };
 
@@ -63,8 +91,11 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             alert('Nombre, Email y Teléfono son obligatorios');
             return;
         }
-        onSave(prospecto.id, {
-            nombre: `${form.nombre} ${form.apellido}`.trim(),
+
+        // Si es agente, no alteramos el user_create_id original.
+        // Si es jefe, enviamos el que haya seleccionado.
+        const changes: any = {
+            nombre: form.nombre,
             apellido: form.apellido,
             empresa: form.empresa,
             cargo: form.cargo,
@@ -73,8 +104,15 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             celular: form.celular,
             ciudad: form.ciudad,
             etapa: form.etapa,
-            color: ETAPA_COLORS[form.etapa],
-        });
+            producto: form.producto,
+            created_at: form.created_at ? new Date(`${form.created_at}T00:00:00`).toISOString() : undefined,
+        };
+
+        if (isJefe) {
+            changes.user_create_id = form.user_create_id;
+        }
+
+        onSave(prospecto.id, changes);
         onHide();
     };
 
@@ -195,7 +233,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             {/* ── Estado ── */}
             <ModalSectionHeader icon="pi-chart-line" title="Estado" />
             <div className="grid">
-                <div className="col-12">
+                <div className="col-6">
                     <FormField label="Etapa AIDA">
                         <Dropdown
                             value={form.etapa}
@@ -205,6 +243,62 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
                         />
                     </FormField>
                 </div>
+
+                <div className="col-6">
+                    <FormField label="Categoría de Interés">
+                        <Dropdown
+                            value={form.producto}
+                            options={[
+                                { label: '🚗 Vehículo', value: 'Vehículo' },
+                                { label: '🏠 Vivienda', value: 'Vivienda' }
+                            ]}
+                            onChange={(e) => set('producto', e.value)}
+                            placeholder="Seleccione categoría"
+                        />
+                    </FormField>
+                </div>
+
+                <div className="col-6">
+                    <FormField label="Fecha de creacion">
+                        <Calendar
+                            value={form.created_at ? new Date(form.created_at + 'T12:00:00') : null}
+                            onChange={(e) => {
+                                const val = e.value as Date;
+                                if (val) {
+                                    const y = val.getFullYear();
+                                    const m = String(val.getMonth() + 1).padStart(2, '0');
+                                    const d = String(val.getDate()).padStart(2, '0');
+                                    set('created_at', `${y}-${m}-${d}`);
+                                } else {
+                                    set('created_at', '');
+                                }
+                            }}
+                            dateFormat="yy-mm-dd"
+                            placeholder="AAAA-MM-DD"
+                            showIcon
+                        />
+                    </FormField>
+                </div>
+
+                {/* Solo perfiles que sean Jefe Comercial pueden ver/editar el agente asignado */}
+                {isJefe && (
+                    <div className="col-6">
+                        <FormField label="Agente">
+                            <Dropdown
+                                value={form.user_create_id}
+                                options={usuarios.map(u => ({
+                                    label: `${u.nombres} ${u.apellidos} `,
+                                    value: u.userID
+                                }))}
+                                onChange={(e) => set('user_create_id', e.value)}
+                                placeholder={loadingUsers ? 'Cargando...' : 'Seleccione Agente...'}
+                                filter
+                                filterBy="label"
+                                showClear
+                            />
+                        </FormField>
+                    </div>
+                )}
             </div>
 
             {/* Log de control invisible para debugging visual */}

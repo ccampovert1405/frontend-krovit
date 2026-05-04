@@ -14,7 +14,7 @@ export interface Agente {
 }
 
 // ─── Prospectos ───
-export type EtapaAIDA = 'Atención' | 'Interés' | 'Deseo' | 'Acción';
+export type EtapaAIDA = 'ATENCION' | 'INTERES' | 'DESEO' | 'ACCION';
 export type TipoProducto = 'Vehículo' | 'Vivienda' | 'Remodelación';
 export type FuenteProspecto = 'Web' | 'Redes Sociales' | 'Referido' | 'Evento' | 'Llamada' | 'Directo';
 
@@ -38,50 +38,81 @@ export interface Prospecto {
   tipo: TipoProducto | string;
   etapa: EtapaAIDA;
   notas?: string;
-  fecha: string;
+  created_at?: string;
+  updated_at?: string;
   mes: number;
-  agente: string;
-  color?: string;
+  agente?: string;
+  user_create_id?: number | string;
+  user_create?: {
+    userID: string;
+    nombres: string;
+    apellidos: string;
+  };
 }
 
 // ─── Oportunidades ───
-export type EtapaOportunidad = 'Calificación' | 'Propuesta' | 'Negociación' | 'Cierre' | 'Ganada' | 'Perdida';
+export type EtapaOportunidad = 'Calificación' | 'Propuesta' | 'Negociación' | 'Cierre' | 'Ganada' | 'Perdida' | 'Caída';
 
 export type TipoProductoOportunidad = 'Vehículo' | 'Vivienda' | 'Remodelación';
 
 export interface Oportunidad {
-  id: number;
+  id: string | number;
   nombre: string;
   cliente: string;          // nombre del prospecto/cliente
-  clienteId?: number;       // id del prospecto seleccionado
+  clienteId?: number | string; // id del prospecto seleccionado
   producto: TipoProductoOportunidad | string;
   plan: number | string;    // monto del plan seleccionado
+  subProducto?: string;     // ej: "72 Meses"
+  compromiso?: string;      // ej: "30% - 21 Cuotas"
   fuente: string;
   notas?: string;
   valor: number;
   probabilidad: number;
   etapa: EtapaOportunidad;
   fecha: string;
+  created_at?: string;
   mes: number;
   agente: string;
+  user_create_id?: number | string;
+  user_create?: {
+    userID: string;
+    nombres: string;
+    apellidos: string;
+  };
   color?: string;
+  fk_plazo?: number | null;
+  fk_plan?: number | null;
+  fk_financiamiento?: number | null;
+  planData?: PlanFinancieroData;
 }
 
 // ─── Tareas ───
 export type PrioridadTarea = 'alta' | 'media' | 'baja';
 export type TipoTarea = 'llamada' | 'correo' | 'visita' | 'reunión';
+export type EstadoTarea = 'PENDIENTE' | 'EN SEGUIMIENTO' | 'FINALIZADO';
 
 export interface Tarea {
-  id: number;
+  id: string | number;
   titulo: string;
   descripcion?: string;
   prioridad: PrioridadTarea;
   tipo: TipoTarea;
   fecha: string;
+  hora?: string;
   mes: number;
   agente: string;
+  user_create_id?: number | string;
+  user_create?: {
+    userID: string;
+    nombres: string;
+    apellidos: string;
+  };
   contacto: string;
   completada: boolean;
+  recordatorio?: string;
+  cliente_id?: string | number | null;
+  oportunidad_id?: string | number | null;
+  estado: EstadoTarea;
 }
 
 // ─── Actividades ───
@@ -90,17 +121,35 @@ export type TipoActividad = 'Llamada' | 'Videollamada' | 'Visita Terreno' | 'Reu
 export interface Actividad {
   id: number;
   titulo: string;
-  hora: string;
+  fecha_inicio: string;
+  hora_inicio: string;
+  fecha_fin: string;
+  hora_fin: string;
   contacto: string;
-  tipo: TipoActividad;
-  duracion: string;
-  dia: string;
-  mes: number;
-  agente: string;
-  color?: string;
-  icon?: string;
-  ubicacion?: string;
+  tipo: string; // Uppercase: LLAMADA, VIDEOLLAMADA, VISITA, REUNION
+  ubicacion_link: string;
+  notas?: string;
+  mes?: number;
+  agente?: string;
 }
+
+// ─── Metas (Goals) ───
+export interface Meta {
+  id?: string | number;
+  mes: string; // "Enero", "Febrero", etc.
+  anio: number;
+  metaProspectos?: number;
+  metaOportunidades?: number;
+  metaCierres?: number;
+  metaIngresos?: number;
+  user_id?: string;
+  user?: {
+    userID: string;
+    nombres: string;
+    apellidos: string;
+  };
+}
+
 
 // ─── Formulario Nuevo Prospecto ───
 export interface NuevoProspectoForm {
@@ -123,17 +172,46 @@ export interface NuevoProspectoForm {
   notas: string;
 }
 
+// ─── Grupos de Ventas ───
+export interface GrupoVentas {
+  id: string | number;
+  nombre: string;
+  descripcion?: string;
+  jefeComercialId?: string;
+  jefeComercial?: {
+    userID: string;
+    nombres: string;
+    apellidos: string;
+    rol?: string;
+  };
+  agentes?: {
+    userID: string;
+    nombres: string;
+    apellidos: string;
+    rol?: string;
+  }[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // ─── Navegación ───
 export type PageKey =
   | 'login'
   | 'forgot-password'
   | 'dashboard'
+  | 'dashboard-leads'
+  | 'dashboard-gerente'
   | 'prospectos'
   | 'planificacion'
   | 'oportunidades'
   | 'tareas'
   | 'forecast'
-  | 'actividades';
+  | 'actividades'
+  | 'usuarios'
+  | 'roles'
+  | 'permisos'
+  | 'leads'
+  | 'grupos-ventas';
 
 export interface MenuItem {
   key: PageKey;
@@ -156,4 +234,30 @@ export interface KPIData {
   trendLabel?: string;
   icon: string;
   color: string;
+}
+
+// ─── Plan Financiero ───
+export interface CompromisoOferta {
+  tipo: string;             // ej: 30
+  cuotas: number;           // ej: 21
+  valor_financiamiento: number; // ej: 7245
+}
+
+export interface PlanFinancieroData {
+  producto: string;                   // "Vehículo"
+  subProducto: string;                // "72 Meses"
+  montoBase: number;                  // 20000
+  montoFinal: number;                 // 24840
+  inscripcion: number;                // 1035
+  cuotaMensual: number;               // 345
+  compromiso?: CompromisoOferta;      // Opcional
+}
+// ─── Notificaciones ───
+export interface RealtimeNotification {
+  id: number;
+  tipo: 'aviso' | 'asignacion' | 'venta';
+  titulo: string;
+  mensaje: string;
+  leido: boolean;
+  createdAt: string;
 }

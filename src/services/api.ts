@@ -1,65 +1,135 @@
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+
 // ═══════════════════════════════════════════════════════════
 // SERVICIOS CENTRALIZADOS — CRM Planifikt
-//
-// FUENTE ÚNICA para todas las llamadas HTTP.
-// Configura la URL base en .env:  VITE_API_URL=http://localhost:1000/api
 // ═══════════════════════════════════════════════════════════
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:1000/api';
 
-// ─── Helpers de autenticación ────────────────────────────
-const getToken = () => localStorage.getItem('accessToken') ?? '';
-const getRefresh = () => localStorage.getItem('refreshToken') ?? '';
-const setToken = (t: string) => localStorage.setItem('accessToken', t);
+// ─── Helpers de almacenamiento ────────────────────────────
+const getToken = () => localStorage.getItem('access_token') ?? '';
+const getRefresh = () => localStorage.getItem('refresh_token') ?? '';
+const setToken = (t: string) => localStorage.setItem('access_token', t);
 
-const buildHeaders = (extra: Record<string, string> = {}): Record<string, string> => ({
-    'Content-Type': 'application/json',
-    ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-    ...extra,
+// ─── Instancia de Axios ─────────────────────────────
+export const api = axios.create({
+    baseURL: BASE,
+    headers: {
+        'Content-Type': 'application/json',
+    },
 });
 
-// ─── Refresh Token automático ─────────────────────────────
-const tryRefresh = async (): Promise<boolean> => {
-    const refresh = getRefresh();
-    if (!refresh) return false;
-    try {
-        const res = await fetch(`${BASE}/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: refresh }),
-        });
-        if (!res.ok) return false;
-        const { accessToken } = await res.json();
-        setToken(accessToken);
-        return true;
-    } catch {
-        return false;
-    }
+// ─── Interceptor de Petición (Token Bearer) ───
+api.interceptors.request.use(
+    (config: InternalAxiosRequestConfig) => {
+        const token = getToken();
+        if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+// ─── Interceptor de Respuesta (Refresh Token) ───
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
 };
 
-// ─── fetch central con retry 401 ────────────────────────
+api.interceptors.response.use(
+    (response) => response,
+    async (error: AxiosError) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+        // Evitar reintento automático si el error es 401 en el cambio de contraseña.
+        // El backend usa 401 para indicar que la "contraseña actual" es incorrecta.
+        const isChangePassword = originalRequest.url?.includes('/auth/change-password');
+
+        if (error.response?.status === 401 && !originalRequest._retry && !isChangePassword) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                    .then((token) => {
+                        if (originalRequest.headers) {
+                            originalRequest.headers.Authorization = `Bearer ${token}`;
+                        }
+                        return api(originalRequest);
+                    })
+                    .catch((err) => Promise.reject(err));
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            const refresh = getRefresh();
+            if (!refresh) {
+                isRefreshing = false;
+                return Promise.reject(error);
+            }
+
+            try {
+                // Try with both common naming conventions for the body
+                const res = await axios.post(`${BASE}/auth/refresh`, {
+                    refreshToken: refresh,
+                    refresh_token: refresh
+                });
+
+                // Try with both common naming conventions for the response token
+                const access_token = res.data.access_token || res.data.accessToken || res.data.token;
+
+                if (!access_token) {
+                    throw new Error('Refresh failed - no access token in response');
+                }
+
+                setToken(access_token);
+                processQueue(null, access_token);
+                if (originalRequest.headers) {
+                    originalRequest.headers.Authorization = `Bearer ${access_token}`;
+                }
+                return api(originalRequest);
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                // Si falla el refresh, forzar logout
+                localStorage.clear();
+                window.location.href = '/login';
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        return Promise.reject(error);
+    }
+);
+
+// ─── Wrapper de fetch para compatibilidad (opcional, pero mejor usar api directamente) ───
 export const apiFetch = async <T>(
     path: string,
-    options: RequestInit = {}
+    options: any = {}
 ): Promise<T> => {
-    const url = `${BASE}${path}`;
-    let res = await fetch(url, { ...options, headers: buildHeaders(options.headers as Record<string, string>) });
-
-    if (res.status === 401) {
-        const refreshed = await tryRefresh();
-        if (refreshed) {
-            res = await fetch(url, { ...options, headers: buildHeaders(options.headers as Record<string, string>) });
-        }
-    }
-
-    if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { message?: string }).message ?? `HTTP ${res.status}`);
-    }
-
-    const text = await res.text();
-    return text ? (JSON.parse(text) as T) : (undefined as unknown as T);
+    const { method = 'GET', body, ...rest } = options;
+    const res = await api.request<T>({
+        url: path,
+        method,
+        data: body ? (typeof body === 'string' ? JSON.parse(body) : body) : undefined,
+        ...rest,
+    });
+    return res.data;
 };
+
+// Helper para normalizar nombres de productos (remover tildes y a minúsculas)
+const normalizeProduct = (prod: string) => prod.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 // ════════════════════════════════════════════════════════════
 // PROSPECTOS  →  /prospects
@@ -78,10 +148,28 @@ export interface ProspectoAPI {
     fuente?: string;
     notas?: string;
     mes?: number;
+    created_at?: string;
+    createdAt?: string;
+    updated_at?: string;
+    updatedAt?: string;
     agente?: string;
+    user_create_id?: number | string;
+    user_create?: {
+        userID: string;
+        nombres: string;
+        apellidos: string;
+    };
 }
 
-export const apiGetProspectos = () => apiFetch<ProspectoAPI[]>('/prospects');
+export const apiGetProspectos = (params: { mes?: string; anio?: string; userId?: string | number }) => {
+    const path = params.userId ? `/prospects/user/${params.userId}` : '/prospects';
+    const queryParams = new URLSearchParams();
+    if (params.mes) queryParams.append('mes', params.mes);
+    if (params.anio) queryParams.append('anio', params.anio);
+    const queryString = queryParams.toString();
+    const finalPath = queryString ? `${path}?${queryString}` : path;
+    return apiFetch<ProspectoAPI[]>(finalPath);
+};
 export const apiCreateProspecto = (data: Partial<ProspectoAPI>) => apiFetch<ProspectoAPI>('/prospects', { method: 'POST', body: JSON.stringify(data) });
 export const apiUpdateProspecto = (id: string | number, data: Partial<ProspectoAPI>) => apiFetch<ProspectoAPI>(`/prospects/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const apiDeleteProspecto = (id: string | number) => apiFetch<void>(`/prospects/${id}`, { method: 'DELETE' });
@@ -90,81 +178,175 @@ export const apiDeleteProspecto = (id: string | number) => apiFetch<void>(`/pros
 // OPORTUNIDADES  →  /oportunidades
 // ════════════════════════════════════════════════════════════
 export interface OportunidadAPI {
-    id: number;
-    nombre: string;
-    cliente?: string;
-    clienteId?: number;
+    id: string | number;
+    nombre_oportunidad: string;
+    prospecto_id: string; // UUID
+    prospecto?: {
+        id: string;
+        nombre: string;
+        apellido: string;
+    };
+    plan_id: number;
+    plan_detalle?: {
+        id: number;
+        monto: string | number;
+        monto_final: string | number;
+        valor_inscripcion: string | number;
+    };
+    plazo_id: number;
+    plazo_detalle?: {
+        id: number;
+        valor_cuota: string | number;
+    };
+    financiamiento_id?: number | null;
+    financiamiento_detalle?: any;
+    estado: string;
     producto?: string;
-    plan?: number | string;
     fuente?: string;
     notas?: string;
     valor?: number;
     probabilidad?: number;
-    etapa?: string;
     fecha?: string;
+    created_at?: string;
+    createdAt?: string;
     mes?: number;
     agente?: string;
+    user_create_id?: number | string;
+    user_create?: {
+        userID: string;
+        nombres: string;
+        apellidos: string;
+    };
     color?: string;
 }
 
-export const apiGetOportunidades = () => apiFetch<OportunidadAPI[]>('/oportunidades');
+export const apiGetOportunidades = (params: { mes: string; anio: string; userId?: string | number }) => {
+    const path = params.userId ? `/oportunidades/user/${params.userId}` : '/oportunidades';
+    return apiFetch<OportunidadAPI[]>(`${path}?mes=${params.mes}&anio=${params.anio}`);
+};
 export const apiCreateOportunidad = (data: Partial<OportunidadAPI>) => apiFetch<OportunidadAPI>('/oportunidades', { method: 'POST', body: JSON.stringify(data) });
-export const apiUpdateOportunidad = (id: number, data: Partial<OportunidadAPI>) => apiFetch<OportunidadAPI>(`/oportunidades/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
-export const apiDeleteOportunidad = (id: number) => apiFetch<void>(`/oportunidades/${id}`, { method: 'DELETE' });
+export const apiUpdateOportunidad = (id: string | number, data: Partial<OportunidadAPI>) => apiFetch<OportunidadAPI>(`/oportunidades/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const apiDeleteOportunidad = (id: string | number) => apiFetch<void>(`/oportunidades/${id}`, { method: 'DELETE' });
 
 // ════════════════════════════════════════════════════════════
 // USUARIOS  →  /users
 // ════════════════════════════════════════════════════════════
 export interface UsuarioAPI {
-    id: number;
-    nombre: string;
-    email: string;
-    rol?: string;
+    userID: string;
+    nombres: string;
+    apellidos: string;
+    estado?: 'activo' | 'inactivo' | string;
+    correo?: string;
+    email?: string;
+    password?: string;
+    rolId?: string;
+    rol?: {
+        id?: string;
+        rolId?: string;
+        nombreRol: string;
+    };
 }
 
+export interface RolAPI {
+    id: string; // Puede ser un number secuencial o UUID segun el endpoint
+    rolId?: string; // El UUID real que pide el backend para relaciones
+    nombreRol: string;
+    permisos?: PermisoAPI[];
+}
+
+export interface PermisoAPI {
+    id: string;
+    nombreAccion: string;
+    identificadorAccion: string;
+    roleId?: string; // Formato del body: { roleId: 'uuid' }
+    rolId?: string; // Alias por si acaso
+    role?: {
+        id?: string;
+        rolId?: string;
+        nombreRol: string;
+        permisos?: PermisoAPI[];
+    };
+}
+
+// ─── Usuarios CRUD ─────────────────────────────────────────
 export const apiGetUsers = () => apiFetch<UsuarioAPI[]>('/users');
+export const apiGetUserById = (id: string) => apiFetch<UsuarioAPI>(`/users/${id}`);
 export const apiCreateUser = (data: Partial<UsuarioAPI>) => apiFetch<UsuarioAPI>('/users', { method: 'POST', body: JSON.stringify(data) });
-export const apiUpdateUser = (id: number, data: Partial<UsuarioAPI>) => apiFetch<UsuarioAPI>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const apiUpdateUser = (id: string, data: Partial<UsuarioAPI>) => apiFetch<UsuarioAPI>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const apiDeleteUser = (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' });
+export const apiGetUsersByRole = (roleName: string) => apiFetch<UsuarioAPI[]>(`/users/role/${roleName}`);
+
+// ─── Roles CRUD ────────────────────────────────────────────
+export const apiGetRoles = () => apiFetch<RolAPI[]>('/roles');
+export const apiGetRolById = (id: string) => apiFetch<RolAPI>(`/roles/${id}`);
+export const apiCreateRol = (data: { nombreRol: string }) => apiFetch<RolAPI>('/roles', { method: 'POST', body: JSON.stringify(data) });
+export const apiUpdateRol = (id: string, data: { nombreRol: string }) => apiFetch<RolAPI>(`/roles/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const apiDeleteRol = (id: string) => apiFetch<void>(`/roles/${id}`, { method: 'DELETE' });
+
+// ─── Permisos CRUD ─────────────────────────────────────────
+export const apiGetPermisos = () => apiFetch<PermisoAPI[]>('/permissions');
+export const apiCreatePermiso = (data: { nombreAccion: string; identificadorAccion: string; roleId: string }) => apiFetch<PermisoAPI>('/permissions', { method: 'POST', body: JSON.stringify(data) });
+export const apiUpdatePermiso = (id: string, data: Partial<{ nombreAccion: string; identificadorAccion: string; roleId: string }>) => apiFetch<PermisoAPI>(`/permissions/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const apiDeletePermiso = (id: string) => apiFetch<void>(`/permissions/${id}`, { method: 'DELETE' });
 
 // ════════════════════════════════════════════════════════════
-// ACTIVIDADES  →  /actividades
+// ACTIVIDADES  →  /activities
 // ════════════════════════════════════════════════════════════
 export interface ActividadAPI {
     id: number;
-    titulo?: string;
-    tipo?: string;
-    fecha?: string;
+    titulo: string;
+    tipo: string;
+    fecha_inicio: string;
+    hora_inicio: string;
+    fecha_fin: string;
+    hora_fin: string;
+    contacto: string;
+    ubicacion_link: string;
+    notas: string;
     mes?: number;
     agente?: string;
-    prospectoId?: number;
-    oportunidadId?: number;
-    notas?: string;
 }
 
-export const apiGetActividades = () => apiFetch<ActividadAPI[]>('/actividades');
-export const apiCreateActividad = (data: Partial<ActividadAPI>) => apiFetch<ActividadAPI>('/actividades', { method: 'POST', body: JSON.stringify(data) });
-export const apiUpdateActividad = (id: number, data: Partial<ActividadAPI>) => apiFetch<ActividadAPI>(`/actividades/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
-export const apiDeleteActividad = (id: number) => apiFetch<void>(`/actividades/${id}`, { method: 'DELETE' });
+export const apiGetActividades = () => apiFetch<ActividadAPI[]>('/activities');
+export const apiGetActivityById = (id: number | string) => apiFetch<ActividadAPI>(`/activities/${id}`);
+export const apiCreateActividad = (data: Partial<ActividadAPI>) => apiFetch<ActividadAPI>('/activities', { method: 'POST', body: JSON.stringify(data) });
+export const apiUpdateActividad = (id: number | string, data: Partial<ActividadAPI>) => apiFetch<ActividadAPI>(`/activities/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const apiDeleteActividad = (id: number | string) => apiFetch<void>(`/activities/${id}`, { method: 'DELETE' });
 
 // ════════════════════════════════════════════════════════════
 // TAREAS  →  /tareas
 // ════════════════════════════════════════════════════════════
 export interface TareaAPI {
-    id: number;
+    id: number | string;
     titulo?: string;
-    tipo?: string;
+    descripcion?: string;
     prioridad?: string;
+    tipo?: string;
     fecha?: string;
-    mes?: number;
-    agente?: string;
+    hora?: string;
+    recordatorio?: string;
+    contacto?: string;
+    cliente_id?: string | number | null;
+    oportunidad_id?: string | number | null;
     completada?: boolean;
-    prospectoId?: number;
+    agente?: string;
+    user_create_id?: number | string;
+    user_create?: {
+        userID: string;
+        nombres: string;
+        apellidos: string;
+    };
+    estado?: string;
 }
 
-export const apiGetTareas = () => apiFetch<TareaAPI[]>('/tareas');
+export const apiGetTareas = (params: { mes: string; anio: string; userId?: string | number }) => {
+    const path = params.userId ? `/tareas/user/${params.userId}` : '/tareas';
+    return apiFetch<TareaAPI[]>(`${path}?mes=${params.mes}&anio=${params.anio}`);
+};
+export const apiGetTareasPorOportunidad = (oportunidadId: string | number) => apiFetch<TareaAPI[]>(`/tareas/oportunidad/${oportunidadId}`);
 export const apiCreateTarea = (data: Partial<TareaAPI>) => apiFetch<TareaAPI>('/tareas', { method: 'POST', body: JSON.stringify(data) });
-export const apiUpdateTarea = (id: number, data: Partial<TareaAPI>) => apiFetch<TareaAPI>(`/tareas/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
-export const apiDeleteTarea = (id: number) => apiFetch<void>(`/tareas/${id}`, { method: 'DELETE' });
+export const apiUpdateTarea = (id: number | string, data: Partial<TareaAPI>) => apiFetch<TareaAPI>(`/tareas/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const apiDeleteTarea = (id: number | string) => apiFetch<void>(`/tareas/${id}`, { method: 'DELETE' });
 
 // ════════════════════════════════════════════════════════════
 // DASHBOARD  →  /dashboard
@@ -178,7 +360,200 @@ export interface DashboardKPIs {
     tareasCompletadas: number;
 }
 
+export interface DashboardIndices {
+    kpi_produccion: {
+        cantidad_prospectos_creados: number;
+        cantidad_prospectos_planificados: number;
+        ratio: number;
+    };
+    kpi_eficacia: {
+        cantidad_oportunidades_cerradas: number;
+        cantidad_oportunidades_creadas: number;
+        ratio: number;
+        cantidad_oportunidades_ganadas: number;
+    };
+    kpi_contribucion: {
+        meta_ingresos: number;
+        total_ingresos: number;
+        ratio: number;
+    };
+}
+
 export const apiGetDashboardKPIs = () => apiFetch<DashboardKPIs>('/dashboard/kpis');
 export const apiGetDashboardPipeline = () => apiFetch<unknown>('/dashboard/pipeline');
+
+export const apiGetDashboardIndex = (params: { mes: string; anio: string; userId: string | number }) =>
+    apiFetch<DashboardIndices>(`/dashboard/index?userId=${params.userId}&mes=${params.mes}&anio=${params.anio}`);
+
+export const apiGetDashboardUserIndex = (userId: string | number, params: { mes: string; anio: string }) =>
+    apiFetch<DashboardIndices>(`/dashboard/user/${userId}?mes=${params.mes}&anio=${params.anio}`);
+
+export interface DashboardJefeDetailsAPI {
+    agenteId: string;
+    nombre: string;
+    forecast: {
+        metaProspectos: number;
+        metaOportunidades: number;
+        metaCierres: number;
+        metaIngresos: string | number;
+    } | null;
+    real: {
+        prospectos: number;
+        oportunidades: number;
+        cierres: number;
+        ingresos: number;
+    };
+    tareasPendientes: any[];
+    totalTareasPendientes: number;
+}
+
+export const apiGetDashboardJefeDetails = (params: { mes: string; anio: string }) =>
+    apiFetch<DashboardJefeDetailsAPI[]>(`/dashboard/jefe/details?mes=${params.mes}&anio=${params.anio}`);
+
+// ════════════════════════════════════════════════════════════
+// ADMINISTRACIÓN  →  /administracion
+// ════════════════════════════════════════════════════════════
+
+export interface DetalleListaPrecio {
+    id: number;
+    monto: number;
+    valor_inscripcion: number;
+    monto_final: number;
+}
+
+export interface ListaPrecio {
+    id: number;
+    detalle: string;
+    producto: string;
+    estado: boolean;
+    detalles?: DetalleListaPrecio[];
+}
+
+export interface Plazo {
+    id: number;
+    tipo: string;
+    num_plazo?: number;
+}
+
+export interface Financiamiento {
+    id: number;
+    tipo: string;
+    cuotas?: number;
+    estado?: boolean;
+}
+
+export interface DetallePlazo {
+    id: number;
+    valor_cuota: number;
+}
+
+export interface DetalleFinanciamiento {
+    id: number;
+    valor_financiamiento: number | string;
+    // Estos campos podrían no venir en el detalle según la API real
+    porcentaje?: number;
+    cuotas?: number;
+    valor_total?: number;
+}
+
+export const apiGetListaPrecio = () => apiFetch<ListaPrecio[]>('/administracion/lista-precio');
+export const apiGetListaPrecioPorProducto = (producto: string) => apiFetch<ListaPrecio[]>(`/administracion/lista-precio/producto/${normalizeProduct(producto)}`);
+export const apiGetListaPrecioDetalles = (id: number) => apiFetch<DetalleListaPrecio[]>(`/administracion/lista-precio/${id}/detalles`);
+export const apiGetPlazo = () => apiFetch<Plazo[]>('/administracion/plazo');
+export const apiGetPlazoPorProducto = (producto: string) => apiFetch<Plazo[]>(`/administracion/plazo/producto/${normalizeProduct(producto)}`);
+export const apiGetFinanciamiento = () => apiFetch<Financiamiento[]>('/administracion/financiamiento');
+export const apiGetFinanciamientoPorProducto = (producto: string) => apiFetch<Financiamiento[]>(`/administracion/financiamiento/producto/${normalizeProduct(producto)}`);
+
+export const apiGetDetallePlazo = (plazoId: number, detalleListaPrecioId: number) =>
+    apiFetch<DetallePlazo>(`/administracion/detalle-plazo/${plazoId}/${detalleListaPrecioId}`);
+
+export const apiGetDetalleFinanciamiento = (financiamientoId: number, detalleListaPrecioId: number) =>
+    apiFetch<DetalleFinanciamiento>(`/administracion/detalle-financiamiento/${financiamientoId}/${detalleListaPrecioId}`);
+
+// ════════════════════════════════════════════════════════════
+// PLAN FINANCIERO  →  /plan-financiero
+// ════════════════════════════════════════════════════════════
+import type { PlanFinancieroData } from '@/types';
+
+export const apiGetPlanFinanciero = (oportunidadId: number | string) =>
+    apiFetch<PlanFinancieroData>(`/plan-financiero/${oportunidadId}`);
+
+// ════════════════════════════════════════════════════════════
+// FORECASTS (METAS)  →  /forecasts
+// ════════════════════════════════════════════════════════════
+import { Meta } from '@/types';
+
+export interface ForecastResponseJefe {
+    total: Meta;
+    detalle: Meta[];
+}
+
+export const apiGetForecastsFilter = (params: { mes: string; anio: string; agente?: string }) => {
+    let url = `/forecasts/search/filter?mes=${params.mes}&anio=${params.anio}`;
+    if (params.agente) url += `&agente=${params.agente}`;
+    return apiFetch<Meta[] | ForecastResponseJefe>(url);
+};
+
+export const apiGetForecastsByUser = (userId: string | number, params: { mes: string; anio: string }) =>
+    apiFetch<Meta[] | ForecastResponseJefe>(`/forecasts/user/${userId}?mes=${params.mes}&anio=${params.anio}`);
+
+export const apiUpdateForecast = (id: string | number, data: Partial<Meta>) =>
+    apiFetch<Meta>(`/forecasts/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+
+export const apiCreateForecast = (data: Partial<Meta>) =>
+    apiFetch<Meta>('/forecasts', { method: 'POST', body: JSON.stringify(data) });
+
+// ════════════════════════════════════════════════════════════
+// NOTIFICACIONES  →  /notifications
+// ════════════════════════════════════════════════════════════
+import type { RealtimeNotification } from '@/types';
+
+export const apiGetNotifications = () =>
+    apiFetch<RealtimeNotification[]>('/notifications');
+
+export const apiMarkNotificationRead = (id: number) =>
+    apiFetch<RealtimeNotification>(`/notifications/${id}/read`, { method: 'PATCH' });
+
+export const apiMarkAllNotificationsRead = () =>
+    apiFetch<{ message: string }>('/notifications/read-all', { method: 'PATCH' });
+
+// ════════════════════════════════════════════════════════════
+// LEADS  →  /leads
+// ════════════════════════════════════════════════════════════
+export const apiUploadLeadsCSV = (formData: FormData) =>
+    api.post('/leads/upload-csv', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+            'accept': '*/*'
+        }
+    }).then(res => res.data);
+
+// ════════════════════════════════════════════════════════════
+// GRUPOS DE VENTAS  →  /grupos-ventas
+// ════════════════════════════════════════════════════════════
+export interface GrupoVentasAPI {
+    id: string | number;
+    nombre: string;
+    descripcion?: string;
+    jefeComercialId?: string;
+    jefeComercial?: UsuarioAPI;
+    agentes?: UsuarioAPI[];
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export const apiGetGruposVentas = () => apiFetch<GrupoVentasAPI[]>('/grupos');
+export const apiGetGrupoVentasById = (id: string | number) => apiFetch<GrupoVentasAPI>(`/grupos/${id}`);
+export const apiCreateGrupoVentas = (data: { nombre: string; descripcion?: string; jefeComercialId?: string }) =>
+    apiFetch<GrupoVentasAPI>('/grupos', { method: 'POST', body: JSON.stringify(data) });
+export const apiUpdateGrupoVentas = (id: string | number, data: { nombre: string; descripcion?: string; jefeComercialId?: string }) =>
+    apiFetch<GrupoVentasAPI>(`/grupos/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const apiDeleteGrupoVentas = (id: string | number) => apiFetch<void>(`/grupos/${id}`, { method: 'DELETE' });
+
+export const apiAssignAgentesToGrupo = (id: string | number, agenteIds: string[]) =>
+    apiFetch<void>(`/grupos/${id}/agentes`, { method: 'PATCH', body: JSON.stringify({ agenteIds }) });
+
+export const apiRemoveAgenteFromGrupo = (id: string | number, agenteId: string) =>
+    apiFetch<void>(`/grupos/${id}/agentes/${agenteId}`, { method: 'DELETE' });
 
 export default apiFetch;

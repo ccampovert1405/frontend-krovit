@@ -6,7 +6,6 @@ export {
     login,
     refreshAccessToken,
     changePassword,
-    getAuthHeaders,
     type LoginCredentials,
     type AuthTokens,
     type AuthUser,

@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks';
 
 // ═══════════════════════════════════════════════════════════
 // PÁGINA DE LOGIN
 // ═══════════════════════════════════════════════════════════
 
 interface LoginPageProps {
-    onForgotPassword: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onForgotPassword }) => {
+export const LoginPage: React.FC<LoginPageProps> = () => {
     const { login } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -50,8 +49,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onForgotPassword }) => {
             <div className="auth-card">
                 {/* Header */}
                 <div className="auth-header">
-                    <div className="auth-icon-wrap">
-                        <i className="pi pi-shield" />
+                    <div className="auth-logo-wrap mb-3">
+                        <img
+                            src="/logo-planifikt.png"
+                            alt="Planifikt Logo"
+                            style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }}
+                        />
                     </div>
                     <h1>Planifikt CRM</h1>
                     <p>Inicia sesión en tu cuenta</p>
@@ -120,12 +123,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onForgotPassword }) => {
                         )}
                     </button>
 
-                    {/* Forgot */}
-                    <div className="auth-secondary">
-                        <button type="button" onClick={onForgotPassword}>
-                            ¿Olvidaste tu contraseña?
-                        </button>
-                    </div>
                 </form>
             </div>
         </div>

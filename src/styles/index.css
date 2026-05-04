@@ -14,13 +14,17 @@ body,
 #root {
   height: 100%;
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  position: relative;
 }
 
 body {
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #F9FAFB;
+  color: #1A1A1A;
 }
 
 /* ─── Scrollbar Personalizado ─── */
@@ -45,15 +49,32 @@ body {
 
 /* ─── Override PrimeReact Theme con colores de marca ─── */
 :root {
+  /* Marca */
   --primary-color: #E31E24;
   --primary-color-text: #ffffff;
+
+  /* Neutros */
+  --text-main: #1A1A1A;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+
+  /* Superficies */
   --surface-ground: #F9FAFB;
   --surface-section: #ffffff;
   --surface-card: #ffffff;
   --surface-overlay: #ffffff;
-  --surface-border: #E5E7EB;
-  --text-color: #1A1A1A;
-  --text-color-secondary: #6B7280;
+  --surface-border: #F3F4F6;
+
+  /* Pesos Tipográficos Premium */
+  --weight-thin: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extra-bold: 800;
+  --weight-black: 900;
+
+  /* Layout */
+  --sidebar-width: 220px;
 }
 
 /* ─── Botones PrimeReact ─── */
@@ -76,18 +97,19 @@ body {
   background: #E31E24 !important;
   border-color: #E31E24 !important;
   color: #fff !important;
-  border-radius: 10px;
-  padding: 10px 24px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(227, 30, 36, 0.25);
+  border-radius: 12px;
+  padding: 12px 26px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  box-shadow: 0 4px 15px rgba(227, 30, 36, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-brand.p-button:hover {
   background: #C41920 !important;
   border-color: #C41920 !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(227, 30, 36, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(227, 30, 36, 0.35);
 }
 
 .btn-brand.p-button:active {
@@ -186,6 +208,61 @@ body {
   color: white !important;
 }
 
+/* ─── MultiSelect PrimeReact ─── */
+.p-multiselect {
+  width: 100%;
+  border: 1px solid #D1D5DB;
+  border-radius: 10px;
+  background-color: #ffffff;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.p-multiselect .p-multiselect-label {
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  color: #1F2937;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  min-height: 44px;
+}
+
+.p-multiselect .p-multiselect-label.p-placeholder {
+  color: #9CA3AF;
+}
+
+.p-multiselect:not(.p-disabled):hover {
+  border-color: #9CA3AF;
+}
+
+.p-multiselect:not(.p-disabled).p-focus {
+  border-color: #E31E24 !important;
+  box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.12) !important;
+  outline: none;
+}
+
+.p-multiselect-panel {
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid #E5E7EB;
+}
+
+.p-multiselect-token {
+  background-color: #FEF2F2 !important;
+  color: #E31E24 !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  padding: 2px 8px !important;
+}
+
+.p-multiselect-token-icon {
+  margin-left: 4px !important;
+  color: #E31E24 !important;
+  font-size: 0.7rem !important;
+}
+
 /* ─── Dialog PrimeReact ─── */
 .p-dialog {
   border-radius: 16px;
@@ -253,10 +330,434 @@ input[type="checkbox"] {
   cursor: pointer;
 }
 
-/* ─── Responsive ─── */
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT PRINCIPAL
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Main content area ─── */
+.app-main {
+  margin-left: var(--sidebar-width);
+  padding: 24px;
+  padding-top: calc(64px + 24px);
+  /* Topbar height + gap */
+  min-height: 100vh;
+}
+
+.topbar {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  height: 64px;
+  background: #ffffff;
+  border-bottom: 1px solid #F3F4F6;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  transition: left 0.3s ease;
+}
+
+.topbar__logo {
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar__logo img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.topbar__logo-text {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #E31E24;
+  letter-spacing: -0.5px;
+}
+
+.topbar__hamburger {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #374151;
+  font-size: 1.2rem;
+  transition: background 0.2s;
+}
+
+.topbar__hamburger:hover {
+  background: #F3F4F6;
+}
+
+.mobile-topbar__profile {
+  cursor: pointer;
+}
+
+.mobile-topbar__profile .p-avatar {
+  width: 32px;
+  height: 32px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* ─── Sidebar Backdrop (mobile) ─── */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.sidebar-backdrop.is-open {
+  display: block;
+}
+
+/* ─── Sidebar close button (mobile only) ─── */
+.sidebar-close-btn {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #F9FAFB;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #6B7280;
+  font-size: 0.9rem;
+  z-index: 10;
+  transition: background 0.2s;
+}
+
+.sidebar-close-btn:hover {
+  background: #F3F4F6;
+}
+
+/* ─── KPI Cards responsive ─── */
+.kpi-cards-grid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+/* ─── Dashboard columns ─── */
+.dashboard-columns {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-col-main {
+  flex: 2;
+  min-width: 0;
+}
+
+.dashboard-col-side {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Kanban smooth scroll ─── */
+.kanban-board {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.kanban-column {
+  min-width: 240px;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+
+/* ─── Page header responsive title ─── */
+.page-header-title {
+  font-size: 2.25rem;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  margin: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE (≤ 768px)
+   ═══════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
+
+  /* Show mobile topbar adjustments */
+  .topbar {
+    left: 0;
+    height: 56px;
+    padding: 0 16px;
+    justify-content: space-between;
+    z-index: 1000;
+  }
+
+  .topbar__logo {
+    display: flex;
+  }
+
+  .topbar__hamburger {
+    display: flex;
+  }
+
+  /* Show sidebar close button */
+  .sidebar-close-btn {
+    display: flex;
+  }
+
+  /* Main content shifts down for topbar, no left margin */
+  .app-main {
+    margin-left: 0;
+    padding: 16px;
+    padding-top: calc(56px + 16px);
+    /* topbar height + gap */
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Sidebar becomes off-canvas overlay */
+  .sidebar-overlay {
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1100 !important;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.2) !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    /* Dynamic high for mobile */
+  }
+
+  .sidebar-overlay.is-open {
+    transform: translateX(0);
+  }
+
+  /* Dialogs */
   .p-dialog {
     width: 95vw !important;
     max-width: 95vw !important;
+    margin: 8px !important;
+    max-height: 90vh;
   }
+
+  .p-dialog .p-dialog-content {
+    overflow-y: auto;
+    max-height: 60vh;
+    padding: 0 16px 8px;
+  }
+
+  .p-dialog .p-dialog-header {
+    padding: 16px 16px 12px;
+  }
+
+  .p-dialog .p-dialog-footer {
+    padding: 12px 16px 16px;
+  }
+
+  /* KPI cards — 2 per row */
+  .kpi-cards-grid .kpi-card,
+  .kpi-cards-grid>div {
+    flex: 1 1 calc(50% - 6px);
+    min-width: calc(50% - 6px) !important;
+  }
+
+  /* Dashboard columns stack */
+  .dashboard-columns {
+    flex-direction: column;
+  }
+
+  .dashboard-col-main,
+  .dashboard-col-side {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Kanban columns narrower */
+  .kanban-column {
+    min-width: 220px;
+  }
+
+  /* Page header title smaller */
+  .page-header-title {
+    font-size: 1.6rem;
+    letter-spacing: -0.5px;
+  }
+
+  /* Page header wrap on mobile */
+  .page-header-wrap {
+    gap: 12px;
+  }
+
+  /* Buttons full width on very small screens */
+  .btn-brand.p-button {
+    padding: 10px 18px;
+    font-size: 0.875rem;
+  }
+
+  /* Dropdown panel full-width for easier tapping */
+  .p-dropdown-panel {
+    max-height: 250px;
+    overflow-y: auto;
+  }
+
+  /* Table/list rows more tap-friendly */
+  .p-datatable .p-datatable-tbody>tr>td {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
+
+  /* Card padding reduced */
+  .p-card .p-card-body {
+    padding: 14px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — VERY SMALL (≤ 480px)
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .app-main {
+    padding: 12px;
+    padding-top: calc(56px + 12px);
+  }
+
+  .kpi-cards-grid .kpi-card,
+  .kpi-cards-grid>div {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+
+  .page-header-title {
+    font-size: 1.4rem;
+  }
+
+  .kanban-column {
+    min-width: 200px;
+  }
+
+  .p-card .p-card-body {
+    padding: 12px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PREMIUM DATATABLE STYLING
+   ═══════════════════════════════════════════════════════════ */
+
+.p-datatable .p-datatable-thead>tr>th {
+  text-align: left !important;
+}
+
+.p-datatable .p-datatable-tbody>tr>td {
+  text-align: left !important;
+}
+
+.datatable-premium .p-datatable-header {
+  background: #ffffff;
+  padding: 1rem;
+  border-bottom: 1px solid #F3F4F6;
+}
+
+.datatable-premium .p-datatable-thead>tr>th {
+  background: #F9FAFB;
+  color: #4B5563;
+  padding: 1.2rem 1rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #F3F4F6;
+  text-align: left;
+  transition: background-color 0.2s;
+}
+
+.datatable-premium .p-datatable-thead>tr>th:hover {
+  background: #F3F4F6;
+}
+
+.datatable-premium .p-datatable-tbody>tr {
+  transition: all 0.2s ease;
+  background-color: #ffffff;
+}
+
+.datatable-premium .p-datatable-tbody>tr>td {
+  padding: 1.2rem 1rem;
+  border-bottom: 1px solid #F9FAFB;
+  color: #374151;
+}
+
+.datatable-premium.p-datatable-hoverable-rows .p-datatable-tbody>tr:hover {
+  background-color: #FEF2F2 !important;
+}
+
+/* Striped rows premium */
+.datatable-premium.p-datatable-striped .p-datatable-tbody>tr:nth-child(even) {
+  background-color: #FAFBFC;
+}
+
+/* Paginator Premium */
+.datatable-premium .p-paginator {
+  background: #ffffff !important;
+  border: none !important;
+  padding: 1rem !important;
+  border-top: 1px solid #F3F4F6 !important;
+}
+
+.datatable-premium .p-paginator .p-paginator-pages .p-paginator-page {
+  border-radius: 8px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  transition: all 0.2s !important;
+}
+
+.datatable-premium .p-paginator .p-paginator-pages .p-paginator-page.p-highlight {
+  background: #E31E24 !important;
+  color: #ffffff !important;
+}
+
+/* -----------------------------------------------------------
+   GLOBAL ICON & LAYOUT TWEAKS
+   ----------------------------------------------------------- */
+
+/* Iconos pi seguidos de texto - Más sutil y sin !important */
+.pi:not(.pi-spin) {
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* En botones, mantener un margen estándar */
+.p-button .p-button-icon-left {
+  margin-right: 10px;
+}
+
+/* Reset de margin para iconos que deben estar centrados */
+.icon-no-margin .pi,
+.icon-box-standard .pi {
+  margin: 0 !important;
+}
+
+/* Sombras Premium */
+.shadow-premium {
+  box-shadow: 0 10px 40px rgba(0,0,0,0.04) !important;
+}
+
+.shadow-premium:hover {
+  box-shadow: 0 15px 50px rgba(0,0,0,0.08) !important;
 }

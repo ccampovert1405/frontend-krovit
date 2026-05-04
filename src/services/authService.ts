@@ -1,8 +1,8 @@
+import { api } from './api';
+
 // ═══════════════════════════════════════════════════════════
 // SERVICIO DE AUTENTICACIÓN
 // ═══════════════════════════════════════════════════════════
-
-const API_BASE_URL = 'http://localhost:1000';
 
 // ─── Interfaces ───
 export interface LoginCredentials {
@@ -11,95 +11,81 @@ export interface LoginCredentials {
 }
 
 export interface AuthTokens {
-    accessToken: string;
-    refreshToken: string;
+    access_token: string;
+    refresh_token: string;
+}
+
+export interface MenuItemConfig {
+    label: string;
+    ruta: string;
+    icono: string;
 }
 
 export interface AuthUser {
-    id: number;
-    email: string;
-    name?: string;
-    role?: string;
+    id: string;
+    correo: string;
+    nombres: string;
+    apellidos: string;
+    rol: string;
+    permisos: string[];
+    menus: MenuItemConfig[];
 }
 
 export interface LoginResponse {
-    accessToken: string;
-    refreshToken: string;
-    user?: AuthUser;
+    access_token: string;
+    refresh_token: string;
+    user: AuthUser;
 }
 
 export interface ChangePasswordPayload {
-    currentPassword: string;
+    oldPassword: string; // Contraseña actual
     newPassword: string;
 }
-
-// ─── Helpers ───
-const getStoredAccessToken = (): string | null => {
-    return localStorage.getItem('accessToken');
-};
-
-export const getAuthHeaders = (): Record<string, string> => {
-    const token = getStoredAccessToken();
-    return {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-};
 
 // ─── API Calls ───
 
 /**
- * POST /api/auth/login
+ * POST /auth/login
  * Inicia sesión con correo y contraseña
  */
 export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
-    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Credenciales incorrectas');
-    }
-
-    return response.json();
+    const response = await api.post<LoginResponse>('/auth/login', credentials);
+    return response.data;
 };
 
 /**
- * POST /api/auth/refresh
- * Renueva el access token usando el refresh token
+ * POST /auth/refresh
+ * Renueva el access token usando el refresh token (Esta función suele usarse en el interceptor)
  */
-export const refreshAccessToken = async (refreshToken: string): Promise<{ accessToken: string }> => {
-    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+export const refreshAccessToken = async (refresh_token: string): Promise<{ access_token: string }> => {
+    const response = await api.post<{ access_token: string }>('/auth/refresh', {
+        refresh_token,
+        refreshToken: refresh_token
     });
-
-    if (!response.ok) {
-        throw new Error('No se pudo renovar la sesión');
-    }
-
-    return response.json();
+    return response.data;
 };
 
 /**
- * POST /api/auth/change-password
+ * POST /auth/change-password
  * Cambia la contraseña del usuario autenticado
  */
 export const changePassword = async (payload: ChangePasswordPayload): Promise<{ message: string }> => {
-    const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-    });
+    const response = await api.post<{ message: string }>('/auth/change-password', payload);
+    return response.data;
+};
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error al cambiar la contraseña');
-    }
+/**
+ * GET /auth/menu
+ * Obtiene la configuración del menú según el rol/permisos (Nuevo)
+ */
+export interface MenuConfigItem {
+    key: string;
+    label: string;
+    icon: string;
+    permission?: string;
+}
 
-    return response.json();
+export const getMenuConfig = async (): Promise<MenuConfigItem[]> => {
+    const response = await api.get<MenuConfigItem[]>('/auth/menu');
+    return response.data;
 };

@@ -4,10 +4,13 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Dropdown } from 'primereact/dropdown';
-import { COLORS, FUENTES_PROSPECCION, PLAN_OPTIONS, ETAPAS_OPORTUNIDAD } from '@/utils/constants';
-import { EtapaOportunidad } from '@/types';
+import { COLORS, FUENTES_PROSPECCION, ETAPAS_OPORTUNIDAD, MESES_NOMBRES } from '@/utils/constants';
+import { EtapaOportunidad, PlanFinancieroData } from '@/types';
 import { FormField, ModalSectionHeader } from '@/components/ui';
-import { apiGetProspectos } from '@/services/api';
+import { apiGetProspectos, apiGetListaPrecio, apiGetListaPrecioPorProducto, apiGetPlazoPorProducto, apiGetDetallePlazo, apiGetDetalleFinanciamiento, apiGetListaPrecioDetalles, apiGetFinanciamientoPorProducto } from '@/services/api';
+import type { DetalleListaPrecio, Plazo, Financiamiento, DetallePlazo, DetalleFinanciamiento, ProspectoAPI } from '@/services/api';
+import { PlanFinanciero } from './PlanFinanciero';
+import { useNotification } from '@/context/NotificationContext';
 
 // ════════════════════════════════════════════════════════════
 // TIPOS
@@ -15,13 +18,18 @@ import { apiGetProspectos } from '@/services/api';
 
 export interface NuevaOportunidadForm {
     nombre: string;
-    clienteId: number | null;
+    clienteId: number | string | null;
     cliente: string;
     producto: string;
     plan: number | string;
+    subProducto: string;
+    compromiso: string;
     fuente: string;
     notas: string;
     etapa: EtapaOportunidad;
+    fk_plazo?: number | null;
+    fk_plan?: number | null;
+    fk_financiamiento?: number | null;
 }
 
 interface Props {
@@ -36,18 +44,9 @@ interface Props {
 // ════════════════════════════════════════════════════════════
 
 const PRODUCTO_OPTS = [
-    { label: '🚗 Vehículo', value: 'Vehículo' },
+    { label: '🚗 Vehículo', value: 'Vehiculo' },
     { label: '🏠 Vivienda', value: 'Vivienda' },
-    { label: '🔨 Remodelación', value: 'Remodelación' },
 ];
-
-const ETAPA_OPTS = ETAPAS_OPORTUNIDAD.map(e => ({ label: e, value: e }));
-const FUENTE_OPTS = FUENTES_PROSPECCION.map(f => ({ label: f, value: f }));
-
-const planLabel = (p: number) => {
-    const cuota = Math.round(p * 0.01728);
-    return `$${p.toLocaleString()} - Cuota $${cuota}/mes`;
-};
 
 // ════════════════════════════════════════════════════════════
 // MODAL NUEVA OPORTUNIDAD
@@ -56,52 +55,244 @@ const planLabel = (p: number) => {
 export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave, saving = false }) => {
     const initial: NuevaOportunidadForm = {
         nombre: '', clienteId: null, cliente: '',
-        producto: '', plan: '', fuente: '',
+        producto: '', plan: '', subProducto: '', compromiso: '', fuente: '',
         notas: '', etapa: 'Calificación',
     };
     const [form, setForm] = useState<NuevaOportunidadForm>(initial);
-    const [clientes, setClientes] = useState<{ label: string; value: number }[]>([]);
+    const [clientes, setClientes] = useState<{ label: string; value: string | number }[]>([]);
     const [loadingClientes, setLoadingClientes] = useState(false);
 
-    // Cargar clientes desde la API al abrir
+    // Dynamic data state
+    const [detallesListaPrecio, setDetallesListaPrecio] = useState<DetalleListaPrecio[]>([]);
+    const [plazos, setPlazos] = useState<Plazo[]>([]);
+    const [financiamientos, setFinanciamientos] = useState<Financiamiento[]>([]);
+
+    // Selection IDs (internal)
+    const [selDetalleId, setSelDetalleId] = useState<number | null>(null);
+    const [selPlazoId, setSelPlazoId] = useState<number | null>(null);
+    const [selFinanciamientoId, setSelFinanciamientoId] = useState<number | null>(null);
+
+    // Fetched details
+    const [detallePlazo, setDetallePlazo] = useState<DetallePlazo | null>(null);
+    const [detalleFin, setDetalleFin] = useState<DetalleFinanciamiento | null>(null);
+
+    // ─── Templates ───
+    const itemTemplateProducto = (option: any) => {
+        const [emoji, ...textParts] = option.label.split(' ');
+        const text = textParts.join(' ');
+        return (
+            <div className="flex align-items-center gap-3">
+                <span style={{ fontSize: '1.2rem', width: '24px', textAlign: 'center' }}>{emoji}</span>
+                <span>{text}</span>
+            </div>
+        );
+    };
+
+    const valueTemplateProducto = (option: any, props: any) => {
+        if (!option) return <span>{props.placeholder}</span>;
+        const [emoji, ...textParts] = option.label.split(' ');
+        const text = textParts.join(' ');
+        return (
+            <div className="flex align-items-center gap-3">
+                <span style={{ fontSize: '1.1rem', width: '22px', textAlign: 'center' }}>{emoji}</span>
+                <span>{text}</span>
+            </div>
+        );
+    };
+
+    // Cargar datos iniciales
     useEffect(() => {
         if (!visible) return;
         setLoadingClientes(true);
-        apiGetProspectos()
-            .then(data =>
-                setClientes(data.map(p => ({
+        Promise.all([
+            apiGetProspectos({ mes: MESES_NOMBRES[new Date().getMonth()], anio: '2026' }),
+            apiGetListaPrecio()
+        ])
+            .then(([prosepctosData]) => {
+                setClientes(prosepctosData.map((p: ProspectoAPI) => ({
                     label: `${p.nombre}${p.apellido ? ' ' + p.apellido : ''}`,
                     value: p.id,
-                })))
-            )
-            .catch(() => {
-                // Si la API falla, mostrar lista vacía sin romper la UI
-                setClientes([]);
+                })));
+            })
+            .catch(err => {
+                console.error("Error loading initial data", err);
             })
             .finally(() => setLoadingClientes(false));
     }, [visible]);
 
+    // Al cambiar producto, cargar planes y plazos
+    useEffect(() => {
+        if (!form.producto) {
+            setDetallesListaPrecio([]);
+            setPlazos([]);
+            return;
+        }
+
+        // Cargar Planes
+        apiGetListaPrecioPorProducto(form.producto)
+            .then(data => {
+                const priceList = Array.isArray(data) ? data[0] : data;
+
+                if (priceList && priceList.id) {
+                    apiGetListaPrecioDetalles(priceList.id)
+                        .then(dets => {
+                            setDetallesListaPrecio(dets);
+                        });
+                }
+            })
+            .catch(err => console.error("Error fetching detalles", err));
+
+        // Cargar Plazos
+        apiGetPlazoPorProducto(form.producto)
+            .then(data => {
+                setPlazos(data);
+            })
+            .catch(err => console.error("Error fetching plazos", err));
+
+        // Cargar Financiamientos (Compromiso de Oferta)
+        apiGetFinanciamientoPorProducto(form.producto)
+            .then(data => {
+                setFinanciamientos(data);
+            })
+            .catch(err => console.error("Error fetching financiamientos", err));
+
+    }, [form.producto]);
+
+    // Al cambiar detalle + plazo
+    useEffect(() => {
+        if (!selDetalleId || !selPlazoId) {
+            setDetallePlazo(null);
+            return;
+        }
+        // No mostramos loading en todo el modal, quizás solo en el recuadro si fuera necesario
+        apiGetDetallePlazo(selPlazoId, selDetalleId)
+            .then(data => {
+                const finalData = Array.isArray(data) ? data[0] : data;
+                setDetallePlazo(finalData);
+            })
+            .catch(err => console.error("Error fetching detalle plazo", err));
+    }, [selDetalleId, selPlazoId]);
+
+    // Al cambiar detalle + financiamiento
+    useEffect(() => {
+        if (!selDetalleId || !selFinanciamientoId) {
+            setDetalleFin(null);
+            return;
+        }
+        apiGetDetalleFinanciamiento(selFinanciamientoId, selDetalleId)
+            .then(data => {
+                const finalData = Array.isArray(data) ? data[0] : data;
+                setDetalleFin(finalData);
+            })
+            .catch(err => console.error("Error fetching detalle financiamiento", err));
+    }, [selDetalleId, selFinanciamientoId]);
+
     const set = <K extends keyof NuevaOportunidadForm>(k: K, v: NuevaOportunidadForm[K]) =>
         setForm(prev => ({ ...prev, [k]: v }));
 
-    const handleClienteChange = (id: number) => {
+    const handleClienteChange = (id: string | number) => {
         const found = clientes.find(c => c.value === id);
         set('clienteId', id);
         set('cliente', found?.label ?? '');
     };
 
-    const planOpts = PLAN_OPTIONS.map(p => ({ label: planLabel(p), value: p }));
-
-    const handleSubmit = () => {
-        if (!form.nombre || !form.clienteId || !form.producto || !form.plan) {
-            alert('Complete los campos obligatorios: Nombre, Cliente, Producto y Plan');
-            return;
-        }
-        onSave(form);
-        setForm(initial);
+    const handleProductoChange = (val: string) => {
+        set('producto', val);
+        // Reset dependant selections
+        setSelDetalleId(null);
+        setSelPlazoId(null);
+        setSelFinanciamientoId(null);
+        set('plan', '');
+        set('subProducto', '');
+        set('compromiso', '');
     };
 
-    const handleClose = () => { setForm(initial); onHide(); };
+    const handlePlanChange = (id: number) => {
+        setSelDetalleId(id);
+        const det = detallesListaPrecio.find(d => d.id === id);
+        set('plan', det?.monto ?? 0);
+    };
+
+    const handlePlazoChange = (id: number) => {
+        setSelPlazoId(id);
+        const p = plazos.find(x => x.id === id);
+        set('subProducto', p?.tipo ?? '');
+    };
+
+    const handleFinChange = (id: number) => {
+        setSelFinanciamientoId(id);
+        const f = financiamientos.find(x => x.id === id);
+        set('compromiso', f?.tipo ?? '');
+    };
+
+    const planOpts = detallesListaPrecio.map(d => ({
+        label: `${d.monto}`,
+        value: d.id
+    }));
+    const plazoOpts = plazos.map(p => ({ label: p.tipo, value: p.id }));
+    const finOpts = [
+        { label: 'Sin Compromiso', value: null },
+        ...financiamientos.map(f => ({ label: f.tipo, value: f.id }))
+    ];
+
+    const FUENTE_OPTS = FUENTES_PROSPECCION.map(f => ({ label: f, value: f }));
+    const ETAPA_OPTS = ETAPAS_OPORTUNIDAD.map(e => ({ label: e, value: e }));
+
+    // ── Resumen del plan data ──
+    const getPlanData = (): PlanFinancieroData | null => {
+        if (!selDetalleId) return null;
+        const det = detallesListaPrecio.find(d => d.id === selDetalleId);
+        if (!det) return null;
+
+        const finMaster = financiamientos.find(f => f.id === selFinanciamientoId);
+        const selectedPlazo = plazos.find(p => p.id === selPlazoId);
+
+        const cuota = detallePlazo ? Number(detallePlazo.valor_cuota) : 0;
+        const numPlazo = selectedPlazo?.num_plazo ?? 0;
+        const calculatedMontoFinal = cuota * numPlazo;
+
+        return {
+            producto: form.producto || 'Vehículo',
+            subProducto: form.subProducto,
+            montoBase: det.monto,
+            montoFinal: calculatedMontoFinal || det.monto_final,
+            inscripcion: det.valor_inscripcion,
+            cuotaMensual: cuota,
+            compromiso: detalleFin ? {
+                tipo: finMaster ? String(finMaster.tipo) : '0',
+                cuotas: finMaster?.cuotas ?? 0,
+                valor_financiamiento: Number(detalleFin.valor_financiamiento || 0),
+            } : undefined
+        };
+    };
+    const currentPlanData = getPlanData();
+
+    const { showWarn } = useNotification();
+
+    const handleSubmit = () => {
+        if (!form.nombre || !form.clienteId || !form.producto || !selDetalleId || !selPlazoId) {
+            showWarn('Complete los campos obligatorios: Nombre, Cliente, Producto, Plan y Sub-Producto', 'Campos incompletos');
+            return;
+        }
+        onSave({
+            ...form,
+            fk_plazo: selPlazoId,
+            fk_plan: selDetalleId,
+            fk_financiamiento: selFinanciamientoId
+        });
+        setForm(initial);
+        setSelDetalleId(null);
+        setSelPlazoId(null);
+        setSelFinanciamientoId(null);
+    };
+
+    const handleClose = () => {
+        setForm(initial);
+        setSelDetalleId(null);
+        setSelPlazoId(null);
+        setSelFinanciamientoId(null);
+        onHide();
+    };
 
     return (
         <Dialog
@@ -186,23 +377,58 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
                         <Dropdown
                             value={form.producto}
                             options={PRODUCTO_OPTS}
-                            onChange={e => set('producto', e.value)}
+                            onChange={e => handleProductoChange(e.value)}
+                            itemTemplate={itemTemplateProducto}
+                            valueTemplate={valueTemplateProducto}
                             placeholder="Seleccione..."
                         />
                     </FormField>
                 </div>
                 <div className="col-6">
-                    <FormField label="Plan" required>
+                    <FormField label="Sub-Producto" required>
                         <Dropdown
-                            value={form.plan}
+                            value={selPlazoId}
+                            options={plazoOpts}
+                            onChange={e => handlePlazoChange(e.value)}
+                            placeholder="Seleccione..."
+                            disabled={!form.producto}
+                        />
+                    </FormField>
+                </div>
+                <div className="col-6">
+                    <FormField label="Plan (Monto)" required>
+                        <Dropdown
+                            value={selDetalleId}
                             options={planOpts}
-                            onChange={e => set('plan', e.value)}
+                            onChange={e => handlePlanChange(e.value)}
                             placeholder="Seleccione plan..."
                             filter
+                            disabled={!form.producto}
+                        />
+                    </FormField>
+                </div>
+                <div className="col-6">
+                    <FormField label="Compromiso de Oferta">
+                        <Dropdown
+                            value={selFinanciamientoId}
+                            options={finOpts}
+                            onChange={e => handleFinChange(e.value)}
+                            placeholder="Seleccione..."
+                            style={{
+                                border: `1.5px solid ${COLORS.red}40`,
+                                color: COLORS.red,
+                                fontWeight: 600,
+                            }}
+                            disabled={!form.producto}
                         />
                     </FormField>
                 </div>
             </div>
+
+            {/* ── Resumen del Plan ── */}
+            {currentPlanData && (
+                <PlanFinanciero data={currentPlanData} />
+            )}
 
             {/* ── Clasificación ── */}
             <ModalSectionHeader icon="pi-chart-line" title="Clasificación" />

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks';
 
 // ═══════════════════════════════════════════════════════════
 // PÁGINA DE CAMBIO DE CONTRASEÑA
@@ -43,7 +43,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onBackTo
         if (!validate()) return;
         setLoading(true);
         try {
-            await changePassword({ currentPassword, newPassword });
+            await changePassword({ oldPassword: currentPassword, newPassword });
             setSuccess(true);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Error al cambiar la contraseña');

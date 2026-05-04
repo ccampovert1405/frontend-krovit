@@ -1,21 +1,15 @@
 import React from 'react';
-import { PageKey, MenuItem } from '@/types';
+import { Link, useLocation } from 'react-router-dom';
+import { PageKey } from '@/types';
 import { COLORS } from '@/utils/constants';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks';
+import { Avatar } from '@/components/ui';
+import { formatUserDisplayName } from '@/utils/formatters';
+import { ChangePasswordModal } from '@/components/auth/ChangePasswordModal';
 
 // ═══════════════════════════════════════════════════════════
-// SIDEBAR - NAVEGACIÓN PRINCIPAL
+// SIDEBAR - NAVEGACIÓN PRINCIPAL (responsive)
 // ═══════════════════════════════════════════════════════════
-
-// ─── Logo SVG ───
-const Logo: React.FC<{ size?: number }> = ({ size = 36 }) => (
-  <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-    <path d="M50 5L15 25V65L50 85L85 65V25L50 5Z" fill={COLORS.red} />
-    <path d="M50 5L15 25V65L50 45V5Z" fill={COLORS.black} opacity="0.3" />
-    <circle cx="50" cy="52" r="14" fill={COLORS.white} />
-    <circle cx="50" cy="52" r="7" fill={COLORS.black} />
-  </svg>
-);
 
 // ─── Krivot Logo SVG ───
 const KrivotLogo: React.FC<{ size?: number }> = ({ size = 20 }) => (
@@ -27,115 +21,207 @@ const KrivotLogo: React.FC<{ size?: number }> = ({ size = 20 }) => (
   </svg>
 );
 
-// ─── Menu Items Configuration ───
-const MENU_ITEMS: MenuItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'pi-th-large' },
-  { key: 'prospectos', label: 'Prospectos', icon: 'pi-users' },
-  { key: 'oportunidades', label: 'Oportunidades', icon: 'pi-sync' },
-  { key: 'tareas', label: 'Tareas', icon: 'pi-check-circle' },
-  { key: 'actividades', label: 'Actividades', icon: 'pi-calendar-plus' },
-  { key: 'forecast', label: 'Forecast', icon: 'pi-chart-line' },
-];
-
 interface SidebarProps {
   active: PageKey;
-  setActive: (page: PageKey) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ active, setActive }) => {
-  const { logout } = useAuth();
+export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, onClose }) => {
+  const { logout, user } = useAuth();
+  const [showPwdModal, setShowPwdModal] = React.useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
+  const location = useLocation();
+
+  const displayName = formatUserDisplayName(user?.nombres, user?.apellidos);
+
+  const menuItems = user?.menus || [];
+
+
+  // Mapeo de iconos
+  const getIcon = (iconName: string, pageKey?: string) => {
+    if (pageKey === 'leads') return 'pi-user-plus';
+    const map: Record<string, string> = {
+      'dashboard': 'pi-th-large',
+      'person': 'pi-users',
+      'attach_money': 'pi-money-bill',
+      'check_circle': 'pi-check-circle',
+      'settings': 'pi-cog',
+      'trending_up': 'pi-chart-line',
+      'calendar': 'pi-calendar',
+      'grupos-ventas': 'pi-sitemap',
+      'dashboard-leads': 'pi-chart-line',
+      'dashboard-gerente': 'pi-briefcase'
+    };
+    return map[iconName] || `pi-${iconName}`;
+  };
+
+  // Mapear rutas de la API a PageKey internas
+  const getPageKey = (ruta: string): PageKey => {
+    const r = ruta.toLowerCase();
+    if (r.includes('usuario') || r.includes('user') || r.includes('config')) return 'usuarios';
+    if (r.includes('rol') || r.includes('role')) return 'roles';
+    if (r.includes('permiso') || r.includes('permission')) return 'permisos';
+    if (r.includes('prospect')) return 'prospectos';
+    if (r.includes('oportunid')) return 'oportunidades';
+    if (r.includes('tarea')) return 'tareas';
+    if (r.includes('grupo')) return 'grupos-ventas';
+    if (r.includes('dashboard-leads')) return 'dashboard-leads';
+
+    return ruta.replace('/', '') as PageKey;
+  };
+
+  const handleLinkClick = () => {
+    // Close sidebar on mobile when a nav item is tapped
+    if (onClose) onClose();
+  };
 
   return (
-    <div
-      className="fixed left-0 top-0 h-screen flex flex-column justify-content-between"
-      style={{
-        width: '220px',
-        backgroundColor: COLORS.white,
-        borderRight: `1px solid ${COLORS.gray200}`,
-        zIndex: 100
-      }}
-    >
-      {/* Header */}
-      <div>
-        <div className="flex align-items-center gap-2 p-3 border-bottom-1" style={{ borderColor: COLORS.gray200 }}>
-          <Logo size={36} />
-          <div>
-            <div className="text-lg font-bold" style={{ color: COLORS.red }}>PLANIFIKT</div>
-            <div className="text-xs text-400">Viviendas y Vehículos para todos.</div>
+    <>
+      {/* Backdrop (mobile only) */}
+      <div
+        className={`sidebar-backdrop${isOpen ? ' is-open' : ''}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Sidebar panel */}
+      <div
+        className={`sidebar-overlay${isOpen ? ' is-open' : ''} fixed left-0 top-0 flex flex-column`}
+        style={{
+          width: '220px',
+          backgroundColor: COLORS.white,
+          borderRight: `1px solid ${COLORS.gray200}`,
+          zIndex: 1100,
+          height: '100dvh', // Modern mobile height
+        }}
+      >
+        {/* Mobile close button */}
+        <button
+          className="sidebar-close-btn"
+          onClick={onClose}
+          aria-label="Cerrar menú"
+        >
+          <i className="pi pi-times" />
+        </button>
+
+        {/* Header - Branding & Profile */}
+        <div className="p-4 border-bottom-1" style={{ borderColor: COLORS.gray100 }}>
+          <div className="flex align-items-center gap-3 mb-4">
+            <img src="/logo-planifikt.png" alt="Logo" style={{ height: '32px', objectFit: 'contain' }} />
+            <div className="text-xl font-black" style={{ color: COLORS.red, letterSpacing: '-0.5px' }}>PLANIFIKT</div>
           </div>
+
+          {/* User Detail - Clickable for "Tree" menu */}
+          <div
+            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            className="flex align-items-center gap-1 p-3 border-round-xl bg-gray-50 border-1 cursor-pointer hover:bg-gray-100 transition-duration-200"
+            style={{ borderColor: COLORS.gray100 }}
+          >
+            <Avatar
+              name={displayName}
+              size="normal"
+            />
+            <div style={{ lineHeight: '1.2' }}>
+              <div className="font-bold text-900" style={{ fontSize: '0.75rem' }}>{displayName}</div>
+              <div className="text-500" style={{ fontSize: '0.5rem' }}>{user?.rol || 'Vendedor'}</div>
+            </div>
+
+            <div className="ml-auto">
+              <i className={`pi pi-chevron-${isUserMenuOpen ? 'up' : 'down'} text-400`} style={{ fontSize: '0.75rem' }} />
+            </div>
+          </div>
+
+          {/* User Menu "Tree" */}
+          {isUserMenuOpen && (
+            <div className="mt-2 flex flex-column gap-1 overflow-hidden transition-all transition-duration-300">
+              <button
+                onClick={() => { setShowPwdModal(true); setIsUserMenuOpen(false); }}
+                className="w-full flex align-items-center gap-1 px-3 py-2 border-round-lg border-none cursor-pointer bg-transparent text-600 hover:text-blue-600 hover:bg-blue-50 transition-duration-200"
+              >
+                <i className="pi pi-lock" style={{ fontSize: '0.75rem' }} />
+                <span className="text-xs font-semibold">Cambiar Contraseña</span>
+              </button>
+
+              <button
+                onClick={() => { logout(); setIsUserMenuOpen(false); }}
+                className="w-full flex align-items-center gap-1 px-3 py-2 border-round-lg border-none cursor-pointer bg-transparent text-600 hover:text-red-600 hover:bg-red-50 transition-duration-200"
+              >
+                <i className="pi pi-sign-out" style={{ fontSize: '0.9rem' }} />
+                <span className="text-xs font-semibold">Cerrar Sesión</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Navigation */}
-        <nav className="p-2">
-          {MENU_ITEMS.map(item => (
-            <button
-              key={item.key}
-              onClick={() => setActive(item.key)}
-              className="w-full flex align-items-center gap-3 px-3 py-2 mb-1 border-round-lg border-none cursor-pointer"
-              style={{
-                backgroundColor: active === item.key ? COLORS.redLight : 'transparent',
-                color: active === item.key ? COLORS.red : COLORS.gray600,
-                transition: 'background-color 0.2s ease, color 0.2s ease',
-              }}
-            >
-              <i className={`pi ${item.icon}`} style={{ fontSize: '1rem' }} />
-              <span className="font-semibold text-sm">{item.label}</span>
-              {active === item.key && (
-                <i className="pi pi-chevron-right ml-auto" style={{ fontSize: '0.75rem' }} />
-              )}
-            </button>
-          ))}
-        </nav>
-      </div>
+        {/* Navigation - Scrollable Area */}
+        <div className="flex-grow-1 overflow-y-auto">
+          {/* Navigation */}
+          <nav className="p-2">
+            {menuItems.map(item => {
+              const pageKey = getPageKey(item.ruta);
+              const isPageActive = active === pageKey || location.pathname === `/${pageKey}`;
 
-      {/* Footer */}
-      <div>
-        {/* Cerrar Sesión */}
-        <div className="px-2 mb-2">
-          <button
-            onClick={logout}
-            className="w-full flex align-items-center gap-3 px-3 py-2 border-round-lg border-none cursor-pointer"
+              return (
+                <Link
+                  key={item.ruta}
+                  to={`/${pageKey}`}
+                  onClick={handleLinkClick}
+                  className="w-full flex align-items-center gap-1 px-3 py-2 mb-1 border-round-lg cursor-pointer no-underline"
+                  style={{
+                    backgroundColor: isPageActive ? COLORS.redLight : 'transparent',
+                    color: isPageActive ? COLORS.red : COLORS.gray600,
+                    transition: 'background-color 0.2s ease, color 0.2s ease',
+                    border: 'none',
+                    display: 'flex'
+                  }}
+                >
+                  <i className={`pi ${getIcon(item.icono, pageKey)}`} style={{ fontSize: '1rem' }} />
+                  <span className="font-semibold text-sm">{item.label}</span>
+                  {isPageActive && (
+                    <i className="pi pi-chevron-right ml-auto" style={{ fontSize: '0.75rem' }} />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Footer - Branding */}
+        <div className="mt-auto">
+
+          {/* Original Branding Footer */}
+          <div
+            className="p-3 border-top-1 bg-gray-50"
             style={{
-              backgroundColor: 'transparent',
-              color: COLORS.gray500,
-              transition: 'background-color 0.2s ease, color 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = COLORS.redLight;
-              e.currentTarget.style.color = COLORS.red;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = COLORS.gray500;
+              borderColor: COLORS.gray200,
+              backgroundColor: '#f9fafb',
+              paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' // Respect iPhone home bar
             }}
           >
-            <i className="pi pi-sign-out" style={{ fontSize: '1rem' }} />
-            <span className="font-semibold text-sm">Cerrar Sesión</span>
-          </button>
-        </div>
-
-        {/* Branding */}
-        <div
-          className="p-3 border-top-1"
-          style={{ borderColor: COLORS.gray200, backgroundColor: COLORS.gray50 }}
-        >
-          <div className="flex align-items-start gap-2">
-            <KrivotLogo size={16} />
-            <div style={{ lineHeight: '1.4' }}>
-              <div style={{ fontSize: '0.65rem', color: '#9CA3AF' }}>
-                Plataforma CRM desarrollada por
-              </div>
-              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#374151' }}>
-                KRIVOT ECUADOR
-              </div>
-              <div style={{ fontSize: '0.6rem', color: '#9CA3AF', marginTop: '2px' }}>
-                CRM Planifikt v1.0
+            <div className="flex align-items-start gap-2">
+              <KrivotLogo size={18} />
+              <div style={{ lineHeight: '1.4' }}>
+                <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                  Plataforma CRM desarrollada por
+                </div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e293b' }}>
+                  KRIVOT ECUADOR
+                </div>
+                <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
+                  CRM Planifikt v1.0
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      <ChangePasswordModal
+        visible={showPwdModal}
+        onHide={() => setShowPwdModal(false)}
+      />
+    </>
   );
 };
 

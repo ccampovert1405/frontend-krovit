@@ -9,7 +9,7 @@ export const COLORS = {
   redDark: '#C41920',
   redLight: '#FEF2F2',
   redBorder: '#FECACA',
-  
+
   // Neutros
   black: '#1A1A1A',
   white: '#FFFFFF',
@@ -22,7 +22,7 @@ export const COLORS = {
   gray600: '#4B5563',
   gray700: '#374151',
   gray800: '#1F2937',
-  
+
   // Semánticos
   green: '#10B981',
   greenLight: '#D1FAE5',
@@ -49,17 +49,17 @@ for (let i = 13000; i <= 80000; i += 5000) {
 }
 
 // ─── Etapas AIDA ───
-export const ETAPAS_AIDA = ['Atención', 'Interés', 'Deseo', 'Acción'] as const;
+export const ETAPAS_AIDA = ['ATENCION', 'INTERES', 'DESEO', 'ACCION'] as const;
 
 export const ETAPA_COLORS = {
-  'Atención': COLORS.blue,
-  'Interés': COLORS.yellow,
-  'Deseo': COLORS.purple,
-  'Acción': COLORS.green,
+  'ATENCION': COLORS.blue,
+  'INTERES': COLORS.yellow,
+  'DESEO': COLORS.purple,
+  'ACCION': COLORS.green,
 } as const;
 
 // ─── Etapas Oportunidades ───
-export const ETAPAS_OPORTUNIDAD = ['Calificación', 'Propuesta', 'Negociación', 'Cierre'] as const;
+export const ETAPAS_OPORTUNIDAD = ['Calificación', 'Propuesta', 'Negociación', 'Cierre', 'Caída'] as const;
 
 export const ETAPA_OPORTUNIDAD_COLORS = {
   'Calificación': COLORS.gray500,
@@ -68,6 +68,7 @@ export const ETAPA_OPORTUNIDAD_COLORS = {
   'Cierre': COLORS.purple,
   'Ganada': COLORS.green,
   'Perdida': COLORS.red,
+  'Caída': COLORS.red,
 } as const;
 
 // ─── Fuentes de Prospección ───
@@ -77,7 +78,8 @@ export const FUENTES_PROSPECCION = [
   'Referido',
   'Evento',
   'Llamada',
-  'Directo'
+  'Directo',
+  'Pauta en redes'
 ] as const;
 
 // ─── Tipos de Tareas ───
