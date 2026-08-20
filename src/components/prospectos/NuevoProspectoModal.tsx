@@ -16,7 +16,7 @@ export interface NuevoProspectoForm {
     nombre: string;
     apellido: string;
     empresa: string;
-    cargo: string;
+    cedula: string;
     email: string;
     telefono: string;
     celular: string;
@@ -44,7 +44,7 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
         nombre: '',
         apellido: '',
         empresa: '',
-        cargo: '',
+        cedula: '',
         email: '',
         telefono: '',
         celular: '',
@@ -177,8 +177,8 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
                     </FormField>
                 </div>
                 <div className="col-6">
-                    <FormField label="Cargo">
-                        <InputText value={form.cargo} onChange={(e) => set('cargo', e.target.value)} placeholder="Cargo" />
+                    <FormField label="Cédula" required>
+                        <InputText value={form.cedula} onChange={(e) => set('cedula', e.target.value)} placeholder="Número de identificación" />
                     </FormField>
                 </div>
             </div>
@@ -187,7 +187,7 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
             <ModalSectionHeader icon="pi-phone" title="Datos de Contacto" />
             <div className="grid" style={{ rowGap: '4px' }}>
                 <div className="col-6">
-                    <FormField label="Email" required>
+                    <FormField label="Email">
                         <InputText value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="correo@ejemplo.com" type="email" />
                     </FormField>
                 </div>

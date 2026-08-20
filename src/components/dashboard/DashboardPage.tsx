@@ -2,6 +2,10 @@ import React, { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from 'primereact/card';
 import { Dropdown } from 'primereact/dropdown';
+import { Dialog } from 'primereact/dialog';
+import { DataTable } from 'primereact/datatable';
+import { Column } from 'primereact/column';
+import { Button } from 'primereact/button';
 import {
   KPICard,
   SectionTitle,
@@ -13,10 +17,24 @@ import {
 } from '@/components/ui';
 import { useFilters, useFilteredData, useKPIs, useAIDAFunnel, useAuth, useDashboardIndices, useForecast, useDashboardJefeDetails } from '@/hooks';
 import { AgentPerformanceCard } from './AgentPerformanceCard';
-import { apiGetUsersByRole, UsuarioAPI } from '@/services/api';
-import { COLORS, MESES_NOMBRES, ETAPA_COLORS, PRIORIDAD_COLORS, TIPO_TAREA_ICONS } from '@/utils/constants';
+import { 
+  apiGetUsersByRole, 
+  UsuarioAPI, 
+  apiGetGruposVentas, 
+  GrupoVentasAPI, 
+  apiGetOportunidadesSinGestion, 
+  OportunidadAPI,
+  apiCreateSeguimiento,
+  apiUpdateSeguimiento,
+  apiGetSeguimientosByOportunidad,
+  apiGetAgencias,
+  AgenciaAPI
+} from '@/services/api';
+import { COLORS, MESES_NOMBRES, ETAPA_COLORS } from '@/utils/constants';
 import { formatUserDisplayName } from '@/utils/formatters';
-import { Tarea, Oportunidad } from '@/types';
+import { Oportunidad, Seguimiento, EstadoSeguimiento } from '@/types';
+import { useNotification } from '@/context/NotificationContext';
+import { OportunidadSeguimientoBox } from '../oportunidades/OportunidadSeguimientoBox';
 
 // ═══════════════════════════════════════════════════════════
 // DASHBOARD PAGE
@@ -25,9 +43,11 @@ import { Tarea, Oportunidad } from '@/types';
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente';
-
-
+  const isSuperGerente = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Gerente';
+  const isGerenteComercial = user?.rol === 'Gerente Comercial';
+  const isGerente = isSuperGerente || isGerenteComercial;
+  const isJefe = user?.rol === 'Jefe Comercial';
+  const isPrivileged = isGerente || isJefe;
 
   const {
     selectedMes,
@@ -39,21 +59,28 @@ export const DashboardPage: React.FC = () => {
     mesActual,
   } = useFilters();
 
-  // Si es agente, forzar el filtro a su propio nombre (o 'Todos' si usamos la lógica de fetchId)
-  // Pero useFilters está acoplado a strings de nombres.
-  // En useFilteredData, si agente !== 'Todos' hace filter.
-  // Sin embargo, useProspectos y useOportunidades ya filtran por API si detectan rol agente.
-  // Así que si soy agente, 'Todos' en el frontend ya significa 'Todos MIS datos'.
-  // Por lo tanto, lo mejor es ocultar el selector de agentes.
+  const [agencias, setAgencias] = React.useState<AgenciaAPI[]>([]);
+  const [selectedAgencia, setSelectedAgencia] = React.useState<string | number>('Todas');
+  const [selectedGrupo, setSelectedGrupo] = React.useState<string | number>('Todos');
+  const [grupos, setGrupos] = React.useState<GrupoVentasAPI[]>([]);
+  const [agentes, setAgentes] = React.useState<UsuarioAPI[]>([]);
 
   useEffect(() => {
-    if (!isPrivileged) {
-      setSelectedAgente('Todos');
+    if (isGerente) {
+      apiGetAgencias()
+        .then(setAgencias)
+        .catch(console.error);
     }
-  }, [isPrivileged, setSelectedAgente]);
+  }, [isGerente]);
 
-  // Agentes Reales
-  const [agentes, setAgentes] = React.useState<UsuarioAPI[]>([]);
+  useEffect(() => {
+    if (isPrivileged) {
+      apiGetGruposVentas()
+        .then(setGrupos)
+        .catch(console.error);
+    }
+  }, [isPrivileged]);
+
   useEffect(() => {
     if (isPrivileged) {
       apiGetUsersByRole('Agente Comercial')
@@ -62,19 +89,232 @@ export const DashboardPage: React.FC = () => {
     }
   }, [isPrivileged]);
 
-  // Buscar el userId si el agente seleccionado no es "Todos"
-  const selectedAgentUser = agentes.find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
+  const assignedAgency = useMemo(() => {
+    if (!isGerenteComercial) return null;
+    return agencias.find(a => String(a.encargadoId) === String(user?.id));
+  }, [agencias, isGerenteComercial, user]);
 
-  const { prospectosFiltrados, oportunidadesFiltradas, tareasFiltradas } = useFilteredData({
+  useEffect(() => {
+    if (isGerenteComercial && assignedAgency) {
+      setSelectedAgencia(assignedAgency.id);
+    }
+  }, [assignedAgency, isGerenteComercial]);
+
+  const [sinGestion, setSinGestion] = React.useState<OportunidadAPI[]>([]);
+  const [loadingSinGestion, setLoadingSinGestion] = React.useState(false);
+  const [showSinGestionModal, setShowSinGestionModal] = React.useState(false);
+
+  // Estados y lógica para seguimiento de oportunidades sin gestión
+  const [selectedOpForGestion, setSelectedOpForGestion] = React.useState<Oportunidad | null>(null);
+  const [savingGestion, setSavingGestion] = React.useState(false);
+  const { showSuccess, showError } = useNotification();
+
+  const getDiasSinGestion = (createdAt: string | Date | undefined) => {
+    if (!createdAt) return 0;
+    const createdDate = new Date(createdAt);
+    const today = new Date();
+    createdDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const diffTime = today.getTime() - createdDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays < 0 ? 0 : diffDays;
+  };
+
+  const handleOpenGestion = async (op: OportunidadAPI) => {
+    const mapped: Oportunidad = {
+      id: op.id,
+      nombre: op.nombre_oportunidad,
+      cliente: op.prospecto ? `${op.prospecto.nombre} ${op.prospecto.apellido || ''}` : 'Sin cliente',
+      clienteId: op.prospecto?.id,
+      producto: op.producto || '',
+      plan: op.plan_detalle?.monto || 0,
+      fuente: op.fuente || '',
+      valor: op.valor || 0,
+      probabilidad: op.probabilidad || 0,
+      etapa: op.estado as any,
+      fecha: op.fecha || '',
+      created_at: op.created_at,
+      mes: op.mes || 0,
+      agente: op.agente || '',
+      user_create_id: op.user_create_id,
+      user_create: op.user_create,
+      seguimientos: []
+    };
+
+    try {
+      const segs = await apiGetSeguimientosByOportunidad(op.id);
+      mapped.seguimientos = segs.map(s => ({
+        ...s,
+        id: s.id,
+        fecha_registro: s.fecha_registro,
+        estado: s.estado as any,
+        tipo_seguimiento: s.tipo_seguimiento as any,
+        gestion_realizada: s.gestion_realizada
+      }));
+    } catch (err) {
+      console.error("Error al cargar seguimientos", err);
+    }
+    
+    setSelectedOpForGestion(mapped);
+  };
+
+  const handleSaveSeguimiento = async (opId: string | number, data: Partial<Seguimiento>) => {
+    try {
+      setSavingGestion(true);
+      if (data.id) {
+        await apiUpdateSeguimiento(String(data.id), data as any);
+        showSuccess('Seguimiento actualizado exitosamente.', 'Actualizado');
+      } else {
+        await apiCreateSeguimiento({
+          ...data,
+          oportunidad_id: opId,
+        } as any);
+        showSuccess('Seguimiento registrado exitosamente.', 'Guardado');
+      }
+
+      // Recargar seguimientos para asegurar consistencia
+      const segs = await apiGetSeguimientosByOportunidad(opId);
+      const mappedSegs = segs.map(s => ({
+        ...s,
+        id: s.id,
+        fecha_registro: s.fecha_registro,
+        estado: s.estado as any,
+        tipo_seguimiento: s.tipo_seguimiento as any,
+        gestion_realizada: s.gestion_realizada
+      }));
+
+      if (selectedOpForGestion) {
+        setSelectedOpForGestion({
+          ...selectedOpForGestion,
+          seguimientos: mappedSegs
+        });
+      }
+
+      // Refrescar listado de oportunidades sin gestión
+      apiGetOportunidadesSinGestion(selectedGrupo)
+        .then(setSinGestion)
+        .catch(console.error);
+
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Error al procesar seguimiento';
+      showError(msg, 'Error');
+    } finally {
+      setSavingGestion(false);
+    }
+  };
+
+  useEffect(() => {
+    setLoadingSinGestion(true);
+    apiGetOportunidadesSinGestion(selectedGrupo)
+      .then(setSinGestion)
+      .catch(console.error)
+      .finally(() => setLoadingSinGestion(false));
+  }, [selectedGrupo]);
+
+  const selectedGrupoObj = useMemo(() => {
+    return grupos.find(g => String(g.id) === String(selectedGrupo));
+  }, [grupos, selectedGrupo]);
+
+  useEffect(() => {
+    if (!isPrivileged) {
+      setSelectedAgente('Todos');
+    }
+  }, [isPrivileged, setSelectedAgente]);
+
+  const jefeGrupo = useMemo(() => {
+    if (!isJefe) return null;
+    return grupos.find(g => 
+      String(g.jefeComercialId) === String(user?.id) || 
+      (g.jefeComercial && String(g.jefeComercial.userID) === String(user?.id))
+    );
+  }, [grupos, isJefe, user]);
+
+  const currentAgentes = useMemo(() => {
+    if (isGerente) {
+      if (selectedGrupo !== 'Todos') {
+        const selectedGrupoObj = grupos.find(g => String(g.id) === String(selectedGrupo));
+        return selectedGrupoObj?.agentes || [];
+      }
+      if (selectedAgencia !== 'Todas') {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+        return agencyGroups.flatMap(g => g.agentes || []);
+      }
+      if (isGerenteComercial && assignedAgency) {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(assignedAgency.id));
+        return agencyGroups.flatMap(g => g.agentes || []);
+      }
+      return agentes;
+    }
+    if (isJefe) {
+      return jefeGrupo?.agentes || [];
+    }
+    return [];
+  }, [isGerente, isJefe, isGerenteComercial, selectedGrupo, selectedAgencia, grupos, agentes, jefeGrupo, assignedAgency]);
+
+  const selectedAgentUser = useMemo(() => {
+    return currentAgentes.find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
+  }, [currentAgentes, selectedAgente]);
+
+  const allowedAgentIds = useMemo(() => {
+    if (isGerente) {
+      if (selectedGrupo !== 'Todos') {
+        const selectedGrupoObj = grupos.find(g => String(g.id) === String(selectedGrupo));
+        return new Set((selectedGrupoObj?.agentes || []).map(a => String(a.userID)));
+      }
+      if (selectedAgencia !== 'Todas') {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+        return new Set(agencyGroups.flatMap(g => g.agentes || []).map(a => String(a.userID)));
+      }
+      if (isGerenteComercial && assignedAgency) {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(assignedAgency.id));
+        return new Set(agencyGroups.flatMap(g => g.agentes || []).map(a => String(a.userID)));
+      }
+      return null;
+    }
+    if (isJefe) {
+      const myGroup = grupos.find(g => 
+        String(g.jefeComercialId) === String(user?.id) || 
+        (g.jefeComercial && String(g.jefeComercial.userID) === String(user?.id))
+      );
+      return new Set((myGroup?.agentes || []).map(a => String(a.userID)));
+    }
+    return null;
+  }, [isGerente, isGerenteComercial, isJefe, selectedGrupo, selectedAgencia, grupos, agencias, user, assignedAgency]);
+
+  const groupAgentIds = allowedAgentIds;
+
+  const { prospectosFiltrados: rawProspectos, oportunidadesFiltradas: rawOportunidades, tareasFiltradas: rawTareas } = useFilteredData({
     mes: selectedMes,
     agente: selectedAgente,
     userId: selectedAgentUser?.userID
   });
 
+  const prospectosFiltrados = useMemo(() => {
+    if (groupAgentIds) {
+      return rawProspectos.filter(p => (p.user_create_id && groupAgentIds.has(String(p.user_create_id))) || !p.user_create_id);
+    }
+    return rawProspectos;
+  }, [rawProspectos, groupAgentIds]);
+
+  const oportunidadesFiltradas = useMemo(() => {
+    if (groupAgentIds) {
+      return rawOportunidades.filter(o => (o.user_create_id && groupAgentIds.has(String(o.user_create_id))) || !o.user_create_id);
+    }
+    return rawOportunidades;
+  }, [rawOportunidades, groupAgentIds]);
+
+  const tareasFiltradas = useMemo(() => {
+    if (groupAgentIds) {
+      return rawTareas.filter(t => (t.user_create_id && groupAgentIds.has(String(t.user_create_id))) || !t.user_create_id);
+    }
+    return rawTareas;
+  }, [rawTareas, groupAgentIds]);
+
   const { indices: dynamicKPIs, loading: loadingIndices } = useDashboardIndices({
     mes: selectedMes,
     anio: new Date().getFullYear().toString(),
-    userId: selectedAgentUser?.userID
+    userId: selectedAgentUser?.userID,
+    grupoId: isGerenteComercial && selectedGrupo !== 'Todos' ? selectedGrupo : undefined
   });
 
   const kpis = useKPIs({
@@ -83,6 +323,12 @@ export const DashboardPage: React.FC = () => {
   });
 
   const aidaFunnel = useAIDAFunnel(prospectosFiltrados);
+
+  const descartadosCount = useMemo(() => {
+    return prospectosFiltrados.filter(p => 
+      p.seguimientos?.some(s => s.tipo_seguimiento === EstadoSeguimiento.NUMERO_EQUIVOCADO)
+    ).length;
+  }, [prospectosFiltrados]);
 
   const currentAnio = new Date().getFullYear().toString();
   const { metas: agentGoals, allMetas } = useForecast({
@@ -93,8 +339,9 @@ export const DashboardPage: React.FC = () => {
 
   const { details: jefeDetails } = useDashboardJefeDetails({
     mes: selectedMes,
-    anio: currentAnio
-  });
+    anio: currentAnio,
+    grupoId: isGerenteComercial && selectedGrupo !== 'Todos' ? selectedGrupo : undefined
+  }, isPrivileged);
 
   const performanceMetrics = useMemo(() => {
     if (!isPrivileged) return null;
@@ -114,10 +361,11 @@ export const DashboardPage: React.FC = () => {
       lostOpps: item.real.perdidas
     });
 
-    // 1. Vista Global (Grilla de agentes) - Solo para Jefe/Admin
+    // 1. Vista Global (Grilla de agentes) - Solo para Jefe/Admin/Gerente Comercial
     if (isPrivileged && selectedAgente === 'Todos' && jefeDetails.length > 0) {
       // Filtramos para que NO aparezca el Jefe Comercial en la grilla
-      const agentIds = new Set(agentes.map(a => a.userID));
+      const currentAgents = isGerenteComercial && selectedGrupoObj ? (selectedGrupoObj.agentes || []) : agentes;
+      const agentIds = new Set(currentAgents.map(a => a.userID));
       return {
         isBatch: true,
         data: jefeDetails
@@ -161,7 +409,7 @@ export const DashboardPage: React.FC = () => {
     }
 
     return null;
-  }, [isPrivileged, selectedAgente, selectedAgentUser, agentGoals, allMetas, prospectosFiltrados, oportunidadesFiltradas, tareasFiltradas, agentes, jefeDetails, user]);
+  }, [isPrivileged, isGerenteComercial, selectedGrupoObj, selectedAgente, selectedAgentUser, agentGoals, allMetas, prospectosFiltrados, oportunidadesFiltradas, tareasFiltradas, agentes, jefeDetails, user]);
 
   // Opciones para dropdowns
   const mesesDisponibles = MESES_NOMBRES.slice(0, mesActual + 1).map((mes, i) => ({
@@ -169,28 +417,86 @@ export const DashboardPage: React.FC = () => {
     value: i,
   }));
 
-  const agentesOptions = [
-    { label: 'Todos los agentes', value: 'Todos' },
-    ...agentes.map(a => {
-      const name = formatUserDisplayName(a.nombres, a.apellidos);
-      return { label: name, value: name };
-    }),
-  ];
+  const agencyOptions = useMemo(() => {
+    if (isGerenteComercial) {
+      if (assignedAgency) {
+        return [{ label: assignedAgency.nombre, value: assignedAgency.id }];
+      }
+      return [];
+    }
+    return [
+      { label: 'Todas las agencias', value: 'Todas' },
+      ...agencias.map(a => ({ label: a.nombre, value: a.id }))
+    ];
+  }, [agencias, isGerenteComercial, assignedAgency]);
 
-  const isJefeComercial = user?.rol === 'Jefe Comercial';
+  const grupoOptions = useMemo(() => {
+    const filtered = selectedAgencia === 'Todas'
+      ? grupos
+      : grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+    return [
+      { label: 'Todos los grupos', value: 'Todos' },
+      ...filtered.map(g => ({ label: g.nombre, value: g.id }))
+    ];
+  }, [grupos, selectedAgencia]);
+
+  const agenteOptions = useMemo(() => {
+    return [
+      { label: isJefe ? 'Todos los agentes del grupo' : 'Todos los agentes', value: 'Todos' },
+      ...currentAgentes.map(a => {
+        const name = formatUserDisplayName(a.nombres, a.apellidos);
+        return { label: name, value: name };
+      })
+    ];
+  }, [currentAgentes, isJefe]);
 
   return (
     <div>
       {/* Header con filtros */}
       <PageHeader title="Dashboard" subtitle="Resumen de tu actividad comercial">
         <div className="flex gap-2 align-items-center flex-wrap">
-          {/* Filtro Agente - SOLO PARA JEFE COMERCIAL */}
-          {isJefeComercial && (
+          {/* Filtro Agencia - SOLO PARA GERENTES */}
+          {isGerente && (
+            <div className="flex align-items-center gap-2">
+              <IconBox icon="pi-building" color={COLORS.blue} bg={COLORS.blueLight} />
+              <Dropdown
+                value={selectedAgencia}
+                options={agencyOptions}
+                onChange={(e) => {
+                  setSelectedAgencia(e.value);
+                  setSelectedGrupo('Todos');
+                  setSelectedAgente('Todos');
+                }}
+                className="w-12rem"
+                placeholder="Seleccionar agencia"
+              />
+            </div>
+          )}
+
+          {/* Filtro Grupo - SOLO PARA GERENTES */}
+          {isGerente && (
+            <div className="flex align-items-center gap-2">
+              <IconBox icon="pi-sitemap" color={COLORS.blue} bg={COLORS.blueLight} />
+              <Dropdown
+                value={selectedGrupo}
+                options={grupoOptions}
+                onChange={(e) => {
+                  setSelectedGrupo(e.value);
+                  setSelectedAgente('Todos');
+                }}
+                className="w-12rem"
+                placeholder="Seleccionar grupo"
+              />
+            </div>
+          )}
+
+          {/* Filtro Agente - PARA GERENTES Y JEFES */}
+          {isPrivileged && (
             <div className="flex align-items-center gap-2">
               <IconBox icon="pi-users" color={COLORS.red} bg={COLORS.redLight} />
               <Dropdown
                 value={selectedAgente}
-                options={agentesOptions}
+                options={agenteOptions}
                 onChange={(e) => setSelectedAgente(e.value)}
                 className="w-12rem"
                 placeholder="Seleccionar agente"
@@ -218,14 +524,28 @@ export const DashboardPage: React.FC = () => {
         <CustomBadge color={COLORS.red} bg={COLORS.redLight}>
           {MESES_NOMBRES[selectedMes]} {new Date().getFullYear()}
         </CustomBadge>
-        {isJefeComercial && (
+        {isGerente && selectedAgencia !== 'Todas' && (
           <CustomBadge color={COLORS.blue} bg={COLORS.blueLight}>
-            {selectedAgente === 'Todos' ? 'Todos los agentes' : selectedAgente}
+            Agencia ID: {selectedAgencia}
+          </CustomBadge>
+        )}
+        {isGerente && selectedGrupo !== 'Todos' && selectedGrupoObj && (
+          <CustomBadge color={COLORS.blue} bg={COLORS.blueLight}>
+            Grupo: {selectedGrupoObj.nombre}
+          </CustomBadge>
+        )}
+        {isPrivileged && (
+          <CustomBadge color={COLORS.green} bg={COLORS.greenLight}>
+            {selectedAgente === 'Todos' ? (isJefe ? 'Todos los agentes del grupo' : 'Todos los agentes') : selectedAgente}
           </CustomBadge>
         )}
         {hasActiveFilters && (
           <button
-            onClick={resetFilters}
+            onClick={() => {
+              resetFilters();
+              setSelectedAgencia('Todas');
+              setSelectedGrupo('Todos');
+            }}
             className="text-xs bg-transparent border-none cursor-pointer font-semibold underline"
             style={{ color: COLORS.red }}
           >
@@ -272,6 +592,15 @@ export const DashboardPage: React.FC = () => {
           trendLabel={kpis.cicloVenta ? 'Óptimo' : '—'}
           color={COLORS.purple}
         />
+        <KPICard
+          icon="pi-trash"
+          label="DESCARTADOS"
+          value={loadingIndices ? '...' : String(descartadosCount)}
+          sub="Prospectos con número equivocado"
+          trend="neutral"
+          trendLabel="Descartados"
+          color={COLORS.gray500}
+        />
       </div>
 
       <div className="dashboard-columns">
@@ -310,7 +639,23 @@ export const DashboardPage: React.FC = () => {
           </Card>
 
           {/* Contenido Principal: Grilla o Lista */}
-          {isPrivileged && performanceMetrics && (
+          {isGerenteComercial && selectedGrupo === 'Todos' && (
+            <Card className="mb-4 shadow-1 text-center py-5" style={{ borderRadius: '16px' }}>
+              <i className="pi pi-users text-400 mb-3" style={{ fontSize: '2.5rem', color: COLORS.gray400 }} />
+              <div className="font-bold text-gray-700 text-lg">Visualización de Agentes</div>
+              <div className="text-gray-500 text-sm mt-1">Selecciona un grupo de ventas arriba para visualizar el rendimiento de sus agentes.</div>
+            </Card>
+          )}
+
+          {isGerenteComercial && selectedGrupo !== 'Todos' && performanceMetrics && performanceMetrics.data.length === 0 && (
+            <Card className="mb-4 shadow-1 text-center py-5" style={{ borderRadius: '16px' }}>
+              <i className="pi pi-users text-400 mb-3" style={{ fontSize: '2.5rem', color: COLORS.gray400 }} />
+              <div className="font-bold text-gray-700 text-lg">Sin Agentes Asignados</div>
+              <div className="text-gray-500 text-sm mt-1">Este grupo de ventas no tiene agentes registrados para este período.</div>
+            </Card>
+          )}
+
+          {isPrivileged && performanceMetrics && performanceMetrics.data.length > 0 && (
             <div className="grid mb-4">
               {performanceMetrics.data.map((item, idx) => (
                 <div key={idx} className={`col-12 ${performanceMetrics.isBatch ? 'md:col-6' : ''}`}>
@@ -366,93 +711,210 @@ export const DashboardPage: React.FC = () => {
 
         {/* Right Column */}
         <div className="dashboard-col-side">
-          {/* Tareas Pendientes */}
-          <Card className="mb-3 shadow-1">
+          {/* Oportunidades sin Gestión */}
+          <Card className="mb-3 shadow-1" style={{ borderRadius: '16px' }}>
             <SectionTitle
-              icon="pi-check-circle"
-              title="Tareas Pendientes"
-              badge={tareasFiltradas.filter(t => !t.completada).length}
+              icon="pi-clock"
+              title="Sin Gestión"
+              badge={sinGestion.length}
             />
-            {tareasFiltradas.length === 0 ? (
-              <EmptyState message="No hay tareas para este período" />
-            ) : (
-              tareasFiltradas.slice(0, 3).map((tarea: Tarea) => (
-                <div
-                  key={tarea.id}
-                  className="flex align-items-start gap-2 py-2 border-bottom-1"
-                  style={{ borderColor: COLORS.gray100 }}
-                >
-                  <input type="checkbox" className="mt-1" style={{ accentColor: COLORS.red }} />
-                  <div className="flex-1">
-                    <div className="flex align-items-center gap-2">
-                      <i
-                        className={`pi ${TIPO_TAREA_ICONS[tarea.tipo]} `}
-                        style={{
-                          fontSize: '0.85rem',
-                          color: tarea.tipo === 'llamada' ? COLORS.blue :
-                            tarea.tipo === 'correo' ? COLORS.yellow :
-                              tarea.tipo === 'visita' ? COLORS.green : COLORS.purple
-                        }}
-                      />
-                      <span className="text-sm font-semibold text-900">{tarea.titulo}</span>
-                    </div>
-                    <div className="text-xs text-500 mt-1">{tarea.contacto}</div>
-                    <div className="flex gap-2 mt-1 align-items-center">
-                      <CustomBadge
-                        color={PRIORIDAD_COLORS[tarea.prioridad].color}
-                        bg={PRIORIDAD_COLORS[tarea.prioridad].bg}
-                      >
-                        {tarea.prioridad}
-                      </CustomBadge>
-                      <span className="text-xs text-400">⏰ Vencida</span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-            <button
-              onClick={() => navigate('/tareas')}
-              className="w-full flex align-items-center justify-content-center gap-1 mt-3 py-2 bg-transparent border-none cursor-pointer text-sm font-semibold"
-              style={{ color: COLORS.red }}
-            >
-              Ver todas las tareas <i className="pi pi-arrow-right" style={{ fontSize: '0.8rem' }} />
-            </button>
-          </Card>
-
-          {/* Calendario Mini */}
-          <Card className="shadow-1">
-            <SectionTitle
-              icon="pi-calendar"
-              title="Calendario"
-              badge={`${MESES_NOMBRES[selectedMes]} ${new Date().getFullYear()}`}
-            />
-            <MiniCalendar selectedMonth={selectedMes} />
-            <div className="mt-3 pt-2 border-top-1" style={{ borderColor: COLORS.gray100 }}>
-              <div className="text-sm font-semibold text-600">
-                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {loadingSinGestion ? (
+              <div className="text-center py-4">
+                <i className="pi pi-spin pi-spinner" style={{ fontSize: '1.5rem', color: COLORS.red }} />
               </div>
-              {tareasFiltradas.filter(t => {
-                const d = new Date(t.fecha);
-                const todayRef = new Date();
-                return d.getDate() === todayRef.getDate() && d.getMonth() === todayRef.getMonth() && d.getFullYear() === todayRef.getFullYear();
-              }).length === 0 && (
-                  <div className="text-xs text-400 mt-1">Sin actividades programadas</div>
-                )}
-            </div>
-            <button
-              onClick={() => navigate('/actividades')}
-              className="w-full flex align-items-center justify-content-center gap-1 mt-2 py-2 bg-transparent border-none cursor-pointer text-sm font-semibold"
-              style={{ color: COLORS.red }}
-            >
-              Ver calendario completo <i className="pi pi-arrow-right" style={{ fontSize: '0.8rem' }} />
-            </button>
+            ) : sinGestion.length === 0 ? (
+              <EmptyState message="No hay oportunidades sin gestión" />
+            ) : (
+              <div className="flex flex-column gap-3 mt-3">
+                {sinGestion.slice(0, 3).map((op) => {
+                  const dias = getDiasSinGestion(op.created_at);
+                  return (
+                    <div
+                      key={op.id}
+                      className="flex align-items-center justify-content-between p-3 border-round-xl hover:bg-gray-50 transition-duration-200 cursor-pointer"
+                      style={{ border: `1px solid ${COLORS.gray100}`, background: COLORS.white }}
+                      onClick={() => handleOpenGestion(op)}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="font-bold text-gray-800 text-sm" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {op.nombre_oportunidad}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          👤 {op.prospecto?.nombre} {op.prospecto?.apellido || ''}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1 flex align-items-center gap-1">
+                          <i className="pi pi-calendar" style={{ fontSize: '0.7rem' }} />
+                          Creado: {op.created_at ? new Date(op.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '—'}
+                        </div>
+                      </div>
+                      <div className="text-right ml-3">
+                        <span className="font-bold text-red-600 text-sm" style={{ color: COLORS.red }}>
+                          {dias} día{dias !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            
+            {sinGestion.length > 3 && (
+              <button
+                onClick={() => setShowSinGestionModal(true)}
+                className="w-full flex align-items-center justify-content-center gap-1 mt-3 py-2 bg-transparent border-none cursor-pointer text-sm font-semibold"
+                style={{ color: COLORS.red }}
+              >
+                Ver todos ({sinGestion.length}) <i className="pi pi-arrow-right" style={{ fontSize: '0.8rem' }} />
+              </button>
+            )}
           </Card>
         </div>
       </div>
+
+      {/* Modal para visualizar todas las Oportunidades sin Gestión */}
+      <Dialog
+        header={
+          <div className="flex align-items-center gap-2">
+            <IconBox icon="pi-clock" color={COLORS.red} bg={COLORS.redLight} />
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '1.2rem', color: COLORS.black }}>Oportunidades sin Gestión</div>
+              <div style={{ color: COLORS.gray400, fontSize: '0.8rem', marginTop: '2px' }}>Listado completo de oportunidades sin ningún seguimiento registrado</div>
+            </div>
+          </div>
+        }
+        visible={showSinGestionModal}
+        onHide={() => setShowSinGestionModal(false)}
+        style={{ width: '750px', borderRadius: '16px', overflow: 'hidden' }}
+        breakpoints={{ '960px': '90vw', '641px': '100%' }}
+        modal
+        headerStyle={{ borderBottom: 'none' }}
+        contentStyle={{ borderTop: 'none', padding: '10px 24px 24px' }}
+      >
+        <DataTable
+          value={sinGestion}
+          paginator
+          rows={10}
+          className="datatable-premium"
+          emptyMessage="No se encontraron oportunidades sin gestión"
+          paginatorTemplate="CurrentPageReport PrevPageLink PageLinks NextPageLink"
+          currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} registros"
+        >
+          <Column
+            header="OPORTUNIDAD"
+            body={(op) => (
+              <div className="flex flex-column gap-1">
+                <span className="font-bold text-gray-800">{op.nombre_oportunidad}</span>
+                <span className="text-xs text-gray-500">Producto: {op.producto || '—'}</span>
+              </div>
+            )}
+          />
+          <Column
+            header="CLIENTE / PROSPECTO"
+            body={(op) => (
+              <div className="flex flex-column gap-1">
+                <span className="font-semibold text-gray-700">{op.prospecto?.nombre} {op.prospecto?.apellido || ''}</span>
+                <span className="text-xs text-gray-400">Creado por: {op.user_create?.nombres} {op.user_create?.apellidos}</span>
+              </div>
+            )}
+          />
+          <Column
+            header="DÍAS SIN GESTIÓN"
+            body={(op) => {
+              const dias = getDiasSinGestion(op.created_at);
+              return (
+                <span className="font-bold text-red-600" style={{ color: COLORS.red }}>
+                  {dias} día{dias !== 1 ? 's' : ''}
+                </span>
+              );
+            }}
+          />
+          <Column
+            header="FECHA CREACIÓN"
+            body={(op) => (
+              <span className="text-sm text-gray-600">
+                {op.created_at ? new Date(op.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
+              </span>
+            )}
+          />
+          <Column
+            header="ACCIONES"
+            body={(op) => (
+              <Button
+                icon="pi pi-comments"
+                text
+                rounded
+                className="p-button-danger"
+                tooltip="Ingresar Gestión"
+                tooltipOptions={{ appendTo: () => document.body, position: 'top' }}
+                onClick={() => handleOpenGestion(op)}
+              />
+            )}
+          />
+        </DataTable>
+      </Dialog>
+
+      {/* Modal para Registrar Gestión */}
+      <Dialog
+        header={
+          <div className="flex align-items-center gap-3">
+            <IconBox
+              icon="pi-comments"
+              size="48px"
+              iconSize="1.3rem"
+              color={COLORS.red}
+              bg={COLORS.redLight}
+            />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: COLORS.gray800 }}>
+                {selectedOpForGestion?.nombre}
+              </div>
+              <div style={{ fontSize: '0.82rem', color: COLORS.gray500, marginTop: '2px' }}>
+                Ingresar gestión para esta oportunidad
+              </div>
+            </div>
+          </div>
+        }
+        visible={!!selectedOpForGestion}
+        onHide={() => setSelectedOpForGestion(null)}
+        style={{ width: '680px', borderRadius: '16px', overflow: 'hidden' }}
+        breakpoints={{ '960px': '90vw', '641px': '100%' }}
+        modal
+        headerStyle={{ borderBottom: 'none' }}
+        contentStyle={{ borderTop: 'none', padding: '10px 24px 24px' }}
+      >
+        {selectedOpForGestion && (
+          <div className="flex flex-column gap-4">
+            {/* Info de la oportunidad */}
+            <div style={{
+              background: COLORS.gray50,
+              borderRadius: '12px',
+              padding: '16px 20px',
+            }}>
+              <div className="grid">
+                <div className="col-6">
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, color: COLORS.gray500, textTransform: 'uppercase', marginBottom: '4px' }}>Cliente</div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 600, color: COLORS.gray800 }}>{selectedOpForGestion.cliente}</div>
+                </div>
+                <div className="col-6">
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, color: COLORS.gray500, textTransform: 'uppercase', marginBottom: '4px' }}>Producto</div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 600, color: COLORS.gray800 }}>{selectedOpForGestion.producto || '—'}</div>
+                </div>
+              </div>
+            </div>
+
+            <OportunidadSeguimientoBox 
+              oportunidad={selectedOpForGestion} 
+              onSaveSeguimiento={handleSaveSeguimiento}
+              loading={savingGestion}
+            />
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 };
 
+/*
 // ─── Mini Calendar Component ───
 interface MiniCalendarProps {
   selectedMonth: number;
@@ -529,5 +991,6 @@ const MiniCalendar: React.FC<MiniCalendarProps> = ({ selectedMonth }) => {
     </div>
   );
 };
+*/
 
 export default DashboardPage;

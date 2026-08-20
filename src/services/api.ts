@@ -143,7 +143,7 @@ export interface ProspectoAPI {
     celular?: string;
     ciudad?: string;
     empresa?: string;
-    cargo?: string;
+    cedula?: string;
     etapa?: string;
     fuente?: string;
     notas?: string;
@@ -159,6 +159,7 @@ export interface ProspectoAPI {
         nombres: string;
         apellidos: string;
     };
+    seguimientos?: SeguimientoAPI[];
 }
 
 export const apiGetProspectos = (params: { mes?: string; anio?: string; userId?: string | number }) => {
@@ -382,11 +383,17 @@ export interface DashboardIndices {
 export const apiGetDashboardKPIs = () => apiFetch<DashboardKPIs>('/dashboard/kpis');
 export const apiGetDashboardPipeline = () => apiFetch<unknown>('/dashboard/pipeline');
 
-export const apiGetDashboardIndex = (params: { mes: string; anio: string; userId: string | number }) =>
-    apiFetch<DashboardIndices>(`/dashboard/index?userId=${params.userId}&mes=${params.mes}&anio=${params.anio}`);
+export const apiGetDashboardIndex = (params: { mes: string; anio: string; userId: string | number; grupoId?: string | number }) => {
+    let url = `/dashboard/index?userId=${params.userId}&mes=${params.mes}&anio=${params.anio}`;
+    if (params.grupoId) url += `&grupoId=${params.grupoId}`;
+    return apiFetch<DashboardIndices>(url);
+};
 
-export const apiGetDashboardUserIndex = (userId: string | number, params: { mes: string; anio: string }) =>
-    apiFetch<DashboardIndices>(`/dashboard/user/${userId}?mes=${params.mes}&anio=${params.anio}`);
+export const apiGetDashboardUserIndex = (userId: string | number, params: { mes: string; anio: string; grupoId?: string | number }) => {
+    let url = `/dashboard/user/${userId}?mes=${params.mes}&anio=${params.anio}`;
+    if (params.grupoId) url += `&grupoId=${params.grupoId}`;
+    return apiFetch<DashboardIndices>(url);
+};
 
 export interface DashboardJefeDetailsAPI {
     agenteId: string;
@@ -407,8 +414,17 @@ export interface DashboardJefeDetailsAPI {
     totalTareasPendientes: number;
 }
 
-export const apiGetDashboardJefeDetails = (params: { mes: string; anio: string }) =>
-    apiFetch<DashboardJefeDetailsAPI[]>(`/dashboard/jefe/details?mes=${params.mes}&anio=${params.anio}`);
+export const apiGetDashboardJefeDetails = (params: { mes: string; anio: string; grupoId?: string | number }) => {
+    let url = `/dashboard/jefe/details?mes=${params.mes}&anio=${params.anio}`;
+    if (params.grupoId) url += `&grupoId=${params.grupoId}`;
+    return apiFetch<DashboardJefeDetailsAPI[]>(url);
+};
+
+export const apiGetOportunidadesSinGestion = (grupoId?: string | number) => {
+    let url = '/dashboard/oportunidades-sin-gestion';
+    if (grupoId && grupoId !== 'Todos') url += `?grupoId=${grupoId}`;
+    return apiFetch<OportunidadAPI[]>(url);
+};
 
 // ════════════════════════════════════════════════════════════
 // ADMINISTRACIÓN  →  /administracion
@@ -419,6 +435,16 @@ export interface DetalleListaPrecio {
     monto: number;
     valor_inscripcion: number;
     monto_final: number;
+    detalles_plazo?: {
+        id: number;
+        valor_cuota: number;
+        plazo?: Plazo;
+    }[];
+    detalles_financiamiento?: {
+        id: number;
+        valor_financiamiento: number | string;
+        financiamiento?: Financiamiento;
+    }[];
 }
 
 export interface ListaPrecio {
@@ -433,6 +459,8 @@ export interface Plazo {
     id: number;
     tipo: string;
     num_plazo?: number;
+    producto?: string;
+    estado?: boolean;
 }
 
 export interface Financiamiento {
@@ -440,6 +468,7 @@ export interface Financiamiento {
     tipo: string;
     cuotas?: number;
     estado?: boolean;
+    producto?: string;
 }
 
 export interface DetallePlazo {
@@ -459,9 +488,36 @@ export interface DetalleFinanciamiento {
 export const apiGetListaPrecio = () => apiFetch<ListaPrecio[]>('/administracion/lista-precio');
 export const apiGetListaPrecioPorProducto = (producto: string) => apiFetch<ListaPrecio[]>(`/administracion/lista-precio/producto/${normalizeProduct(producto)}`);
 export const apiGetListaPrecioDetalles = (id: number) => apiFetch<DetalleListaPrecio[]>(`/administracion/lista-precio/${id}/detalles`);
+
+export const apiCreateListaPrecio = (data: Partial<ListaPrecio>) =>
+    apiFetch<ListaPrecio>('/administracion/lista-precio', { method: 'POST', body: JSON.stringify(data) });
+export const apiUpdateListaPrecio = (id: number | string, data: Partial<ListaPrecio>) =>
+    apiFetch<ListaPrecio>(`/administracion/lista-precio/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const apiDeleteListaPrecio = (id: number | string) =>
+    apiFetch<{ message: string }>(`/administracion/lista-precio/${id}`, { method: 'DELETE' });
+export const apiUpdateListaPrecioEstado = (id: number | string, estado: boolean) =>
+    apiFetch<ListaPrecio>(`/administracion/lista-precio/${id}/estado`, { method: 'PATCH', body: JSON.stringify({ estado }) });
+export const apiUpdatePlazoEstado = (id: number | string, estado: boolean) =>
+    apiFetch<Plazo>(`/administracion/plazo/${id}/estado`, { method: 'PATCH', body: JSON.stringify({ estado }) });
+export const apiUpdateFinanciamientoEstado = (id: number | string, estado: boolean) =>
+    apiFetch<Financiamiento>(`/administracion/financiamiento/${id}/estado`, { method: 'PATCH', body: JSON.stringify({ estado }) });
 export const apiGetPlazo = () => apiFetch<Plazo[]>('/administracion/plazo');
+export const apiGetPlazosAll = () => apiFetch<Plazo[]>('/administracion/plazo/all');
+export const apiCreatePlazo = (data: Partial<Plazo>) =>
+    apiFetch<Plazo>('/administracion/plazo', { method: 'POST', body: JSON.stringify(data) });
+export const apiUpdatePlazo = (id: number | string, data: Partial<Plazo>) =>
+    apiFetch<Plazo>(`/administracion/plazo/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const apiDeletePlazo = (id: number | string) =>
+    apiFetch<{ message: string }>(`/administracion/plazo/${id}`, { method: 'DELETE' });
 export const apiGetPlazoPorProducto = (producto: string) => apiFetch<Plazo[]>(`/administracion/plazo/producto/${normalizeProduct(producto)}`);
 export const apiGetFinanciamiento = () => apiFetch<Financiamiento[]>('/administracion/financiamiento');
+export const apiGetFinanciamientosAll = () => apiFetch<Financiamiento[]>('/administracion/financiamiento/all');
+export const apiCreateFinanciamiento = (data: Partial<Financiamiento>) =>
+    apiFetch<Financiamiento>('/administracion/financiamiento', { method: 'POST', body: JSON.stringify(data) });
+export const apiUpdateFinanciamiento = (id: number | string, data: Partial<Financiamiento>) =>
+    apiFetch<Financiamiento>(`/administracion/financiamiento/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const apiDeleteFinanciamiento = (id: number | string) =>
+    apiFetch<{ message: string }>(`/administracion/financiamiento/${id}`, { method: 'DELETE' });
 export const apiGetFinanciamientoPorProducto = (producto: string) => apiFetch<Financiamiento[]>(`/administracion/financiamiento/producto/${normalizeProduct(producto)}`);
 
 export const apiGetDetallePlazo = (plazoId: number, detalleListaPrecioId: number) =>
@@ -538,15 +594,18 @@ export interface GrupoVentasAPI {
     jefeComercialId?: string;
     jefeComercial?: UsuarioAPI;
     agentes?: UsuarioAPI[];
+    leads?: boolean;
+    agencia?: AgenciaAPI | null;
+    agenciaId?: number | null;
     createdAt?: string;
     updatedAt?: string;
 }
 
 export const apiGetGruposVentas = () => apiFetch<GrupoVentasAPI[]>('/grupos');
 export const apiGetGrupoVentasById = (id: string | number) => apiFetch<GrupoVentasAPI>(`/grupos/${id}`);
-export const apiCreateGrupoVentas = (data: { nombre: string; descripcion?: string; jefeComercialId?: string }) =>
+export const apiCreateGrupoVentas = (data: { nombre: string; descripcion?: string; jefeComercialId?: string; leads?: boolean; agenciaId?: number }) =>
     apiFetch<GrupoVentasAPI>('/grupos', { method: 'POST', body: JSON.stringify(data) });
-export const apiUpdateGrupoVentas = (id: string | number, data: { nombre: string; descripcion?: string; jefeComercialId?: string }) =>
+export const apiUpdateGrupoVentas = (id: string | number, data: { nombre: string; descripcion?: string; jefeComercialId?: string; leads?: boolean; agenciaId?: number | null }) =>
     apiFetch<GrupoVentasAPI>(`/grupos/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const apiDeleteGrupoVentas = (id: string | number) => apiFetch<void>(`/grupos/${id}`, { method: 'DELETE' });
 
@@ -555,5 +614,91 @@ export const apiAssignAgentesToGrupo = (id: string | number, agenteIds: string[]
 
 export const apiRemoveAgenteFromGrupo = (id: string | number, agenteId: string) =>
     apiFetch<void>(`/grupos/${id}/agentes/${agenteId}`, { method: 'DELETE' });
+
+// ════════════════════════════════════════════════════════════
+// SEGUIMIENTOS  →  /seguimientos
+// ════════════════════════════════════════════════════════════
+export interface SeguimientoAPI {
+    id: string;
+    oportunidad_id?: string;
+    prospect_id?: string;
+    gestion_realizada: string;
+    estado: 'En seguimiento' | 'Cerrada';
+    tipo_seguimiento: 'NO CONTESTA' | 'VOLVER A LLAMAR' | 'NO INTERESA' | 'NÚMERO EQUIVOCADO';
+    fecha: string;
+    hora: string;
+    minuto: string;
+    calificacion_oportunidad: string;
+    fecha_registro: string;
+    usuario_id: string;
+    numero_seguimiento: number;
+}
+
+export interface SemaforoAPI {
+    oportunidadId: string;
+    prospecto: string;
+    agente: string;
+    estadoOportunidad: string;
+    cantidadSeguimientos: number;
+    ultimaFecha: string;
+    horasTranscurridas: number;
+    semaforo: 'VERDE' | 'AMARILLO' | 'NARANJA' | 'ROJO' | 'LIBRE';
+}
+
+export const apiCreateSeguimiento = (data: Partial<SeguimientoAPI>) =>
+    apiFetch<SeguimientoAPI>('/seguimientos', { method: 'POST', body: JSON.stringify(data) });
+
+export const apiUpdateSeguimiento = (id: string, data: Partial<SeguimientoAPI>) =>
+    apiFetch<SeguimientoAPI>(`/seguimientos/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+
+export const apiGetSeguimientosByOportunidad = (oportunidadId: string | number) =>
+    apiFetch<SeguimientoAPI[]>(`/seguimientos/oportunidad/${oportunidadId}`);
+
+export const apiGetSeguimientosByProspecto = (prospectoId: string | number) =>
+    apiFetch<SeguimientoAPI[]>(`/seguimientos/prospecto/${prospectoId}`);
+
+export const apiGetUncontactedProspectsCount = (params?: { mes?: string; anio?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.mes) queryParams.append('mes', params.mes);
+    if (params?.anio) queryParams.append('anio', params.anio);
+    const queryString = queryParams.toString();
+    const path = queryString ? `/prospects/uncontacted/count?${queryString}` : '/prospects/uncontacted/count';
+    return apiFetch<{ count: number }>(path);
+};
+
+export const apiGetSemaforo = () =>
+    apiFetch<SemaforoAPI[]>('/seguimientos/semaforo');
+
+export const apiReasignarOportunidad = (oportunidadId: string | number, nuevoAgenteId: string) =>
+    apiFetch<any>(`/seguimientos/reasignar/${oportunidadId}`, { method: 'PUT', body: JSON.stringify({ nuevoAgenteId }) });
+
+// ════════════════════════════════════════════════════════════
+// AGENCIAS  →  /agencias
+// ════════════════════════════════════════════════════════════
+export interface AgenciaAPI {
+    id: number;
+    nombre: string;
+    direccion?: string;
+    telefono?: string;
+    encargado?: UsuarioAPI;
+    encargadoId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export const apiGetAgencias = () =>
+    apiFetch<AgenciaAPI[]>('/agencias');
+
+export const apiGetAgenciaById = (id: string | number) =>
+    apiFetch<AgenciaAPI>(`/agencias/${id}`);
+
+export const apiCreateAgencia = (data: Partial<AgenciaAPI>) =>
+    apiFetch<AgenciaAPI>('/agencias', { method: 'POST', body: JSON.stringify(data) });
+
+export const apiUpdateAgencia = (id: string | number, data: Partial<AgenciaAPI>) =>
+    apiFetch<AgenciaAPI>(`/agencias/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+
+export const apiDeleteAgencia = (id: string | number) =>
+    apiFetch<void>(`/agencias/${id}`, { method: 'DELETE' });
 
 export default apiFetch;

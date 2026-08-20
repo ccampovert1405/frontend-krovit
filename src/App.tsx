@@ -1,14 +1,15 @@
 import React, { useState } from 'react'; // v2.1.0-refresh
+import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { PrimeReactProvider } from 'primereact/api';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Sidebar } from '@/components/layout/Sidebar';
+import { Sidebar, BottomNav } from '@/components/layout/Sidebar';
 import { DashboardPage } from '@/components/dashboard/DashboardPage';
 import { DashboardLeadsPage } from '@/components/dashboard-leads';
 import { DashboardGerentePage } from '@/components/dashboard-gerente';
 import { ProspectosPage } from '@/components/prospectos';
 import { OportunidadesPage } from '@/components/oportunidades';
-import { TareasPage } from '@/components/tareas';
-import { ActividadesPage } from '@/components/actividades';
+// import { TareasPage } from '@/components/tareas';
+// import { ActividadesPage } from '@/components/actividades';
 import { PlanificacionPage } from '@/components/pages';
 import { ForecastPage } from '@/components/forecast';
 import { LoginPage } from '@/components/auth/LoginPage';
@@ -22,7 +23,12 @@ import { UsuariosPage } from '@/components/usuarios';
 import { RolesPage } from '@/components/roles';
 import { PermisosPage } from '@/components/permisos';
 import { GruposVentasPage } from '@/components/grupos-ventas';
+import { AgenciasPage } from '@/components/agencias';
+import { ListasPrecioPage } from '@/components/listas-precio';
+import { PlazosPage } from '@/components/plazos';
+import { FinanciamientosPage } from '@/components/financiamientos';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { JefeComercialDashboard } from '@/components/jefe-comercial/JefeComercialDashboard';
 
 // PrimeReact styles
 import 'primereact/resources/themes/lara-light-indigo/theme.css';
@@ -94,12 +100,11 @@ const AppContent: React.FC = () => {
       <header className="topbar">
         <div className="topbar__logo">
           <img src="/logo-planifikt.png" alt="Logo" />
-          <span className="topbar__logo-text">PLANIFIKT</span>
         </div>
         <div className="flex align-items-center gap-3">
           <NotificationBell />
           <button
-            className="topbar__hamburger"
+            className="topbar__hamburger--desktop"
             onClick={() => setIsSidebarOpen(true)}
             aria-label="Abrir menú"
           >
@@ -115,6 +120,12 @@ const AppContent: React.FC = () => {
         onClose={() => setIsSidebarOpen(false)}
       />
 
+      {/* Bottom Navigation Bar (Mobile) */}
+      <BottomNav
+        activeKey={getActivePage()}
+        onOpenMenu={() => setIsSidebarOpen(true)}
+      />
+
       {/* Main Content */}
       <main className="app-main">
         <div className="app-container">
@@ -125,8 +136,8 @@ const AppContent: React.FC = () => {
             <Route path="/dashboard-gerente" element={<AuthGuard><DashboardGerentePage /></AuthGuard>} />
             <Route path="/prospectos" element={<AuthGuard permission="prospect.read"><ProspectosPage /></AuthGuard>} />
             <Route path="/oportunidades" element={<AuthGuard permission="oportunidad.read"><OportunidadesPage /></AuthGuard>} />
-            <Route path="/tareas" element={<AuthGuard permission="tarea.read"><TareasPage /></AuthGuard>} />
-            <Route path="/actividades" element={<AuthGuard permission="tarea.read"><ActividadesPage /></AuthGuard>} />
+            {/* <Route path="/tareas" element={<AuthGuard permission="tarea.read"><TareasPage /></AuthGuard>} /> */}
+            {/* <Route path="/actividades" element={<AuthGuard permission="tarea.read"><ActividadesPage /></AuthGuard>} /> */}
             <Route path="/planificacion" element={<AuthGuard><PlanificacionPage /></AuthGuard>} />
             <Route path="/forecast" element={<AuthGuard><ForecastPage /></AuthGuard>} />
             <Route path="/usuarios" element={<AuthGuard><UsuariosPage /></AuthGuard>} />
@@ -134,6 +145,11 @@ const AppContent: React.FC = () => {
             <Route path="/permisos" element={<AuthGuard><PermisosPage /></AuthGuard>} />
             <Route path="/leads" element={<AuthGuard><LeadsPage /></AuthGuard>} />
             <Route path="/grupos-ventas" element={<AuthGuard><GruposVentasPage /></AuthGuard>} />
+            <Route path="/agencias" element={<AuthGuard permission="agencias.read"><AgenciasPage /></AuthGuard>} />
+            <Route path="/listas-precio" element={<AuthGuard><ListasPrecioPage /></AuthGuard>} />
+            <Route path="/plazos" element={<AuthGuard><PlazosPage /></AuthGuard>} />
+            <Route path="/financiamientos" element={<AuthGuard><FinanciamientosPage /></AuthGuard>} />
+            <Route path="/dashboard-jefe" element={<AuthGuard><JefeComercialDashboard /></AuthGuard>} />
             <Route path="/" element={<Navigate to={defaultDashboard} replace />} />
             <Route path="*" element={<Navigate to={defaultDashboard} replace />} />
           </Routes>
@@ -153,6 +169,7 @@ const App: React.FC = () => {
       <NotificationProvider>
         <AuthProvider>
           <AppContent />
+          <PWAInstallPrompt />
         </AuthProvider>
       </NotificationProvider>
     </PrimeReactProvider>

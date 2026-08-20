@@ -18,14 +18,14 @@ interface EditarProspectoFullForm {
     nombre: string;
     apellido: string;
     empresa: string;
-    cargo: string;
+    cedula: string;
     email: string;
     telefono: string;
     celular: string;
     ciudad: string;
     etapa: EtapaAIDA;
     producto: string;
-    user_create_id: number | string;
+    user_create_id: number | string | null;
     created_at: string;
 }
 
@@ -42,9 +42,7 @@ interface EditarProspectoModalProps {
 
 export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ prospecto, visible, onHide, onSave }) => {
     const { user } = useAuth();
-    const isJefe = user?.rol === 'Jefe Comercial' || user?.rol === 'jefe' || user?.rol === 'Administrador' || user?.rol === 'Admin';
-
-    console.log(isJefe)
+    const isJefe = user?.rol === 'Jefe Comercial' || user?.rol === 'jefe' || user?.rol === 'Administrador' || user?.rol === 'Admin' || user?.rol === 'Gerente Comercial';
 
     const etapaOptions = ETAPAS_AIDA.map(e => ({ label: e, value: e }));
 
@@ -71,14 +69,14 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
         nombre: nombreInicial,
         apellido: apellidoInicial,
         empresa: prospecto.empresa || '',
-        cargo: prospecto.cargo || '',
+        cedula: prospecto.cedula || '',
         email: prospecto.email || '',
         telefono: prospecto.telefono || '',
         celular: prospecto.celular || '',
         ciudad: prospecto.ciudad || '',
         etapa: prospecto.etapa,
         producto: prospecto.producto || 'Vehículo',
-        user_create_id: prospecto.user_create_id || prospecto.user_create?.userID || '',
+        user_create_id: prospecto.user_create_id || prospecto.user_create?.userID || null,
         created_at: prospecto.created_at ? prospecto.created_at.split('T')[0] : '',
     });
 
@@ -98,7 +96,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             nombre: form.nombre,
             apellido: form.apellido,
             empresa: form.empresa,
-            cargo: form.cargo,
+            cedula: form.cedula,
             email: form.email,
             telefono: form.telefono,
             celular: form.celular,
@@ -199,8 +197,8 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
                     </FormField>
                 </div>
                 <div className="col-6">
-                    <FormField label="Cargo">
-                        <InputText value={form.cargo} onChange={(e) => set('cargo', e.target.value)} placeholder="Cargo" />
+                    <FormField label="Cédula">
+                        <InputText value={form.cedula} onChange={(e) => set('cedula', e.target.value)} placeholder="Número de identificación" />
                     </FormField>
                 </div>
             </div>

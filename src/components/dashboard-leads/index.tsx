@@ -77,7 +77,7 @@ const BAR_OPTIONS = {
   }
 };
 
-const STACKED_BAR_OPTIONS = {
+const GROUPED_BAR_OPTIONS = {
   ...CHART_OPTIONS,
   plugins: {
     ...CHART_OPTIONS.plugins,
@@ -87,8 +87,22 @@ const STACKED_BAR_OPTIONS = {
     }
   },
   scales: {
-    x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#9ea3b5' } },
-    y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 11 }, color: '#9ea3b5' } }
+    x: { 
+      stacked: false, 
+      grid: { display: false }, 
+      ticks: { 
+        autoSkip: true,
+        maxRotation: 45,
+        font: { size: 10 }, 
+        color: '#9ea3b5' 
+      } 
+    },
+    y: { 
+      stacked: false, 
+      beginAtZero: true, 
+      grid: { color: 'rgba(0,0,0,0.04)' }, 
+      ticks: { font: { size: 10 }, color: '#9ea3b5' } 
+    }
   }
 };
 
@@ -310,7 +324,7 @@ export default function DashboardLeadsPage() {
           normalizeVendor(r['Vendedor Asignado']),
           r['Resultado 1ra.Llamada'] || 'Sin gestión'
         ]),
-        [48, 30, 42, 16, 34, 30]
+        [48, 32, 38, 16, 36, 30]
       );
     }
 
@@ -326,7 +340,33 @@ export default function DashboardLeadsPage() {
           normalizeVendor(r['Vendedor Asignado']),
           r['Resultado 1ra.Llamada'] || 'Sin gestión'
         ]),
-        [48, 30, 42, 20, 34, 26]
+        [48, 32, 38, 20, 36, 26]
+      );
+    }
+
+    if (pdfOptions.vendedores) {
+      setPdfProgress(90);
+      addSection('Eficacia por Vendedor');
+      const vMap: Record<string, { total: number; gestionados: number }> = {};
+      [...filteredVeh, ...filteredViv].forEach(r => {
+        const v = normalizeVendor(r['Vendedor Asignado']);
+        if (!vMap[v]) vMap[v] = { total: 0, gestionados: 0 };
+        vMap[v].total++;
+        if (r['Resultado 1ra.Llamada'] && r['Resultado 1ra.Llamada'].trim()) vMap[v].gestionados++;
+      });
+      addTable(
+        ['Vendedor', 'Total leads', 'Gestionados', 'Sin gestión', '% Eficacia'],
+        Object.entries(vMap)
+          .filter(([k]) => k !== 'Sin asignar')
+          .sort((a, b) => b[1].total - a[1].total)
+          .map(([name, s]) => [
+            name,
+            s.total,
+            s.gestionados,
+            s.total - s.gestionados,
+            Math.round(s.gestionados / s.total * 100) + '%'
+          ]),
+        [56, 30, 30, 30, 30]
       );
     }
 
@@ -336,7 +376,7 @@ export default function DashboardLeadsPage() {
       doc.setPage(i);
       doc.setFillColor(248, 248, 250); doc.rect(0, pH - 12, pW, 12, 'F');
       doc.setFontSize(7.5); doc.setTextColor(120, 120, 140); doc.setFont('helvetica', 'normal');
-      doc.text('Planifikt CRM — Informe de Gestión de Leads', margin, pH - 4);
+      doc.text('MSc. Johnny Jiménez — Consultor Senior Krivot · mjimenez@krivot.com', margin, pH - 4);
       doc.text(`Pág. ${i}/${pageCount}`, pW - margin, pH - 4, { align: 'right' });
     }
 
@@ -534,16 +574,14 @@ export default function DashboardLeadsPage() {
 function KPICard({ value, label, icon, trend, type, trendColor }: { value: any, label: string, icon: string, trend?: string, type: string, trendColor?: string }) {
   return (
     <div className={`kpi-card ${type}`}>
-      <div className="kpi-icon-row flex justify-content-between align-items-start mb-2">
-        <div className="text-xl" style={{ fontSize: '24px' }}>{icon}</div>
-        {trend && (
-          <div className="text-xs px-2 py-1 border-round-2xl font-bold" style={{ backgroundColor: 'rgba(0,0,0,0.03)', color: trendColor || '#718096' }}>
-            {trend}
-          </div>
-        )}
-      </div>
-      <div className="text-3xl font-bold line-height-1 mb-1 text-900 tracking-tight" style={{ fontSize: '28px' }}>{value}</div>
-      <div className="text-xs font-semibold text-500 uppercase tracking-wider" style={{ fontSize: '11px' }}>{label}</div>
+      <div className="kpi-icon text-xl mb-2" style={{ fontSize: '24px' }}>{icon}</div>
+      <div className="kpi-val text-3xl font-bold line-height-1 text-900 tracking-tight" style={{ fontSize: '28px' }}>{value}</div>
+      <div className="kpi-label text-xs font-semibold text-500 uppercase tracking-wider mt-1" style={{ fontSize: '12px' }}>{label}</div>
+      {trend && (
+        <div className="kpi-trend text-xs font-bold mt-2 flex align-items-center gap-1" style={{ color: trendColor || '#718096', fontSize: '11px' }}>
+          {trend}
+        </div>
+      )}
     </div>
   );
 }
@@ -561,13 +599,7 @@ function GeneralPanel({ filteredVeh, filteredViv }: { filteredVeh: Lead[], filte
   const days = allDates.length ? Math.max(1, Math.ceil((Math.max(...allDates.map(d => d.getTime())) - Math.min(...allDates.map(d => d.getTime()))) / 86400000) + 1) : 1;
   const avg = Math.round((filteredVeh.length + filteredViv.length) / days);
 
-  // Chart: leads por día (Últimos 7 días - Stacked)
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d.toISOString().split('T')[0];
-  });
-
+  // Chart: leads por día — dinámico según período seleccionado
   const dayMapVeh: Record<string, number> = {};
   const dayMapViv: Record<string, number> = {};
 
@@ -580,14 +612,18 @@ function GeneralPanel({ filteredVeh, filteredViv }: { filteredVeh: Lead[], filte
   });
 
   filteredViv.forEach(r => {
-    const d = parseLeadDate(r['Data created'] || r['Date created'] || '');
+    const d = parseLeadDate(r['Date created'] || r['Data created'] || '');
     if (!isNaN(d.getTime())) {
       const k = d.toISOString().split('T')[0];
       dayMapViv[k] = (dayMapViv[k] || 0) + 1;
     }
   });
 
-  const displayLabels = last7Days.map(k => {
+  // Unir todas las fechas únicas de ambas campañas y ordenarlas
+  const allDayKeys = [...new Set([...Object.keys(dayMapVeh), ...Object.keys(dayMapViv)])]
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  const displayLabels = allDayKeys.map(k => {
     const [y, m, d] = k.split('-');
     const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
     return date.toLocaleDateString('es-EC', { day: '2-digit', month: 'short' }).replace('.', '');
@@ -596,8 +632,8 @@ function GeneralPanel({ filteredVeh, filteredViv }: { filteredVeh: Lead[], filte
   const diarioData = {
     labels: displayLabels,
     datasets: [
-      { label: 'Vehículos', data: last7Days.map(k => dayMapVeh[k] || 0), backgroundColor: '#0D6E4E', borderRadius: 4 },
-      { label: 'Viviendas', data: last7Days.map(k => dayMapViv[k] || 0), backgroundColor: '#5046A6', borderRadius: 4 }
+      { label: 'Vehículos', data: allDayKeys.map(k => dayMapVeh[k] || 0), backgroundColor: '#0D6E4E', borderRadius: 4 },
+      { label: 'Viviendas', data: allDayKeys.map(k => dayMapViv[k] || 0), backgroundColor: '#5046A6', borderRadius: 4 }
     ]
   };
 
@@ -643,7 +679,7 @@ function GeneralPanel({ filteredVeh, filteredViv }: { filteredVeh: Lead[], filte
   return (
     <div className="panel animate-in">
       <div className="grid grid-nogutter mb-4" style={{ gap: '12px' }}>
-        <div className="col-12 md:col-4 lg:col-2 flex-grow-1 min-w-[160px]"><KPICard icon="🚗" value={filteredVeh.length} label="Leads vehicc" trend={`~${Math.round(filteredVeh.length / days)}/d`} type="veh" trendColor="var(--col-ok)" /></div>
+        <div className="col-12 md:col-4 lg:col-2 flex-grow-1 min-w-[160px]"><KPICard icon="🚗" value={filteredVeh.length} label="Leads vehículos" trend={`~${Math.round(filteredVeh.length / days)}/d`} type="veh" trendColor="var(--col-ok)" /></div>
         <div className="col-12 md:col-4 lg:col-2 flex-grow-1 min-w-[160px]"><KPICard icon="🏠" value={filteredViv.length} label="Leads viviendas" trend={`~${Math.round(filteredViv.length / days)}/d`} type="viv" trendColor="var(--col-ok)" /></div>
         <div className="col-12 md:col-4 lg:col-2 flex-grow-1 min-w-[160px]"><KPICard icon="🔥" value={calientes} label="Hot (Entrada)" trend={`${Math.round(calientes / (filteredVeh.length || 1) * 100)}%`} type="hot" trendColor="var(--col-hot)" /></div>
         <div className="col-12 md:col-4 lg:col-2 flex-grow-1 min-w-[160px]"><KPICard icon="🏆" value={ventas} label="Ventas confirmadas" trend="¡Top Conversión!" type="ok" trendColor="var(--col-ok)" /></div>
@@ -654,8 +690,8 @@ function GeneralPanel({ filteredVeh, filteredViv }: { filteredVeh: Lead[], filte
       <div className="grid">
         <div className="col-12 lg:col-6">
           <div className="card-custom">
-            <div className="card-title-custom"><BarChart size={16} /> Leads por día — Mix Campañas</div>
-            <div className="chart-container"><Chart type="bar" data={diarioData} options={STACKED_BAR_OPTIONS} /></div>
+            <div className="card-title-custom"><BarChart size={16} /> Leads por día — vehículos y viviendas</div>
+            <div className="chart-container"><Chart type="bar" data={diarioData} options={GROUPED_BAR_OPTIONS} /></div>
           </div>
         </div>
         <div className="col-12 lg:col-6">

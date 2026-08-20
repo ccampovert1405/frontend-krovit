@@ -3,28 +3,26 @@ import { Lead } from "./types";
 export const parseLeadDate = (dateStr: string | undefined): Date => {
   if (!dateStr) return new Date(NaN);
 
-  // Try standard parsing
-  let d = new Date(dateStr);
-
-  // Split parts to handle DD/MM vs MM/DD
-  const parts = dateStr.split(/[\/\s:]/);
+  // Try parsing DD/MM/YYYY format which is common in the source data
+  const parts = dateStr.split(/[\/\s-]/);
   if (parts.length >= 3) {
     const p0 = parseInt(parts[0], 10);
     const p1 = parseInt(parts[1], 10);
-    const p2 = parseInt(parts[2], 10);
+    let p2 = parseInt(parts[2], 10);
 
-    // If MM/DD/YYYY (US) format was parsed but string starts with a number > 12, 
-    // it's definitely DD/MM/YYYY.
-    if (!isNaN(d.getTime()) && p0 > 12) {
-      d = new Date(p2 < 100 ? 2000 + p2 : p2, p1 - 1, p0);
+    // Basic validation for DD/MM/YYYY
+    if (p0 > 0 && p0 <= 31 && p1 > 0 && p1 <= 12 && p2 > 1900) {
+      return new Date(p2, p1 - 1, p0);
     }
-    // If standard parsing failed, try manual DD/MM/YYYY
-    else if (isNaN(d.getTime())) {
-      d = new Date(p2 < 100 ? 2000 + p2 : p2, p1 - 1, p0);
+    
+    // Handle YY format
+    if (p0 > 0 && p0 <= 31 && p1 > 0 && p1 <= 12 && p2 < 100) {
+      return new Date(2000 + p2, p1 - 1, p0);
     }
   }
 
-  return d;
+  // Fallback to standard parsing
+  return new Date(dateStr);
 };
 
 export function normalizeVendor(v: string | undefined): string {

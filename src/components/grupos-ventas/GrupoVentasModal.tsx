@@ -5,9 +5,10 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { MultiSelect } from 'primereact/multiselect';
 import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
+import { InputSwitch } from 'primereact/inputswitch';
 import { FormField, IconBox } from '@/components/ui';
 import { COLORS } from '@/utils/constants';
-import { GrupoVentasAPI, UsuarioAPI } from '@/services/api';
+import { GrupoVentasAPI, UsuarioAPI, AgenciaAPI } from '@/services/api';
 
 // ═══════════════════════════════════════════════════════════
 // MODAL PARA CREAR/EDITAR GRUPOS DE VENTAS
@@ -18,6 +19,8 @@ export interface GrupoVentasForm {
     descripcion: string;
     jefeComercialId: string;
     agenteIds: string[];
+    leads: boolean;
+    agenciaId: number | null;
 }
 
 interface Props {
@@ -26,6 +29,7 @@ interface Props {
     onSave: (form: GrupoVentasForm) => Promise<void>;
     grupo?: GrupoVentasAPI | null;
     usuarios: UsuarioAPI[];
+    agencias: AgenciaAPI[];
     loading?: boolean;
 }
 
@@ -35,13 +39,16 @@ export const GrupoVentasModal: React.FC<Props> = ({
     onSave,
     grupo,
     usuarios,
+    agencias,
     loading = false
 }) => {
     const [form, setForm] = useState<GrupoVentasForm>({
         nombre: '',
         descripcion: '',
         jefeComercialId: '',
-        agenteIds: []
+        agenteIds: [],
+        leads: false,
+        agenciaId: null
     });
 
     useEffect(() => {
@@ -50,14 +57,18 @@ export const GrupoVentasModal: React.FC<Props> = ({
                 nombre: grupo.nombre || '',
                 descripcion: grupo.descripcion || '',
                 jefeComercialId: grupo.jefeComercialId || '',
-                agenteIds: grupo.agentes?.map(a => a.userID) || []
+                agenteIds: grupo.agentes?.map(a => a.userID) || [],
+                leads: grupo.leads || false,
+                agenciaId: grupo.agenciaId || null
             });
         } else {
             setForm({
                 nombre: '',
                 descripcion: '',
                 jefeComercialId: '',
-                agenteIds: []
+                agenteIds: [],
+                leads: false,
+                agenciaId: null
             });
         }
     }, [grupo, visible]);
@@ -79,10 +90,15 @@ export const GrupoVentasModal: React.FC<Props> = ({
         value: u.userID
     }));
 
+    const agenciaOptions = agencias.map(a => ({
+        label: a.nombre,
+        value: a.id
+    }));
+
 
 
     const handleClose = () => {
-        setForm({ nombre: '', descripcion: '', jefeComercialId: '', agenteIds: [] });
+        setForm({ nombre: '', descripcion: '', jefeComercialId: '', agenteIds: [], leads: false, agenciaId: null });
         onHide();
     };
 
@@ -159,6 +175,18 @@ export const GrupoVentasModal: React.FC<Props> = ({
                     />
                 </FormField>
 
+                <FormField label="Agencia">
+                    <Dropdown
+                        value={form.agenciaId}
+                        options={agenciaOptions}
+                        onChange={(e) => handleChange('agenciaId', e.value)}
+                        placeholder="Selecciona una agencia"
+                        filter
+                        showClear
+                        emptyMessage="No se encontraron agencias"
+                    />
+                </FormField>
+
                 <FormField label="Descripción">
                     <InputTextarea
                         value={form.descripcion}
@@ -186,6 +214,17 @@ export const GrupoVentasModal: React.FC<Props> = ({
                             Los usuarios seleccionados podrán ser asignados a este grupo comercial.
                         </small>
                     </FormField>
+                </div>
+
+                <div className="flex align-items-center gap-3 p-3 surface-50 border-round-xl mt-2">
+                    <div className="flex-1">
+                        <div className="font-semibold text-800" style={{ fontSize: '0.92rem' }}>Grupo de Leads</div>
+                        <div className="text-500" style={{ fontSize: '0.78rem' }}>Marcar si este grupo gestionará prospectos de tipo lead</div>
+                    </div>
+                    <InputSwitch 
+                        checked={form.leads} 
+                        onChange={(e) => handleChange('leads', e.value)} 
+                    />
                 </div>
             </form>
         </Dialog>
