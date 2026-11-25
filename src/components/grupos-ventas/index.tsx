@@ -6,11 +6,11 @@ import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { Tag } from 'primereact/tag';
 import { PageHeader, SearchBar, EmptyState, Avatar } from '@/components/ui';
 import { COLORS } from '@/utils/constants';
-import { GrupoVentasAPI, UsuarioAPI } from '@/services/api';
+import { GrupoVentasAPI, UsuarioAPI, AgenciaAPI } from '@/services/api';
 import { useNotification } from '@/context/NotificationContext';
 import { notifyApiError } from '@/utils/errorHelpers';
 import { GrupoVentasModal, GrupoVentasForm } from './GrupoVentasModal';
-import { getGruposVentas, createGrupoVentas, updateGrupoVentas, deleteGrupoVentas, getUsuarios, assignAgentesToGrupo } from './services';
+import { getGruposVentas, createGrupoVentas, updateGrupoVentas, deleteGrupoVentas, getUsuarios, assignAgentesToGrupo, getAgencias } from './services';
 
 // ═══════════════════════════════════════════════════════════
 // GRUPOS DE VENTAS PAGE — CRUD
@@ -19,6 +19,7 @@ import { getGruposVentas, createGrupoVentas, updateGrupoVentas, deleteGrupoVenta
 export const GruposVentasPage: React.FC = () => {
     const [grupos, setGrupos] = useState<GrupoVentasAPI[]>([]);
     const [usuarios, setUsuarios] = useState<UsuarioAPI[]>([]);
+    const [agencias, setAgencias] = useState<AgenciaAPI[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState('');
@@ -29,15 +30,16 @@ export const GruposVentasPage: React.FC = () => {
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
-            const [grps, usrs] = await Promise.all([getGruposVentas(), getUsuarios()]);
+            const [grps, usrs, ags] = await Promise.all([getGruposVentas(), getUsuarios(), getAgencias()]);
             setGrupos(grps || []);
             setUsuarios(usrs || []);
+            setAgencias(ags || []);
         } catch (err) {
             notifyApiError(err, { showError, showWarn }, 'Error al cargar grupos');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [showError, showWarn]);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -56,11 +58,11 @@ export const GruposVentasPage: React.FC = () => {
             let grupoId: string | number;
 
             if (editingGrupo?.id) {
-                await updateGrupoVentas(editingGrupo.id, basicInfo);
+                await updateGrupoVentas(editingGrupo.id, basicInfo as any);
                 grupoId = editingGrupo.id;
                 showSuccess('Información del grupo actualizada.', 'Grupo actualizado');
             } else {
-                const newGrupo = await createGrupoVentas(basicInfo);
+                const newGrupo = await createGrupoVentas(basicInfo as any);
                 grupoId = newGrupo.id;
                 showSuccess('Grupo creado correctamente.', 'Grupo creado');
             }
@@ -217,9 +219,9 @@ export const GruposVentasPage: React.FC = () => {
                         field="agencia" 
                         body={(g: GrupoVentasAPI) => g.agencia ? (
                             <Tag 
-                                value={g.agencia} 
+                                value={g.agencia.nombre} 
                                 severity="warning" 
-                                style={{ borderRadius: '6px', padding: '4px 12px', fontWeight: 600 }}
+                                style={{ backgroundColor: COLORS.yellowLight, color: COLORS.yellow }} 
                             />
                         ) : (
                             <span className="text-400 italic">No asignada</span>
@@ -250,6 +252,7 @@ export const GruposVentasPage: React.FC = () => {
                 onSave={handleSave}
                 grupo={editingGrupo}
                 usuarios={usuarios}
+                agencias={agencias}
                 loading={saving}
             />
         </div>

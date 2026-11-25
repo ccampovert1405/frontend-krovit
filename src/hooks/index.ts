@@ -43,6 +43,7 @@ const toProspecto = (p: ProspectoAPI, fallbackMes?: number): Prospecto => ({
   celular: p.celular ?? '',
   ciudad: p.ciudad ?? '',
   empresa: p.empresa ?? '',
+  cedula: p.cedula ?? '',
   etapa: mapEtapa(p.etapa),   // mapeo a EtapaAIDA (AHORA EN MAYUSCULAS)
   fuente: p.fuente ?? '',
   tipo: '',          // campo interno del frontend, no viene del backend
@@ -593,12 +594,19 @@ export const useForecast = (params: { userId?: string | number; mes: number; ani
 };
 
 // ─── useDashboardJefeDetails ──────────────────────────────────
-export const useDashboardJefeDetails = (params: { mes: number; anio: string; grupoId?: string | number }) => {
+export const useDashboardJefeDetails = (params: { mes: number; anio: string; grupoId?: string | number }, enabled?: boolean) => {
+  const { user } = useAuth();
+  const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Gerente' || user?.rol === 'Gerente Comercial' || user?.rol === 'Jefe Comercial';
+  const isEnabled = enabled !== undefined ? enabled : isPrivileged;
   const [details, setDetails] = useState<DashboardJefeDetailsAPI[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDetails = useCallback(async () => {
+    if (!isEnabled) {
+      setDetails([]);
+      return;
+    }
     setLoading(true);
     setError(null);
     const mesNombre = MESES_NOMBRES[params.mes];
@@ -611,7 +619,7 @@ export const useDashboardJefeDetails = (params: { mes: number; anio: string; gru
     } finally {
       setLoading(false);
     }
-  }, [params.mes, params.anio, params.grupoId]);
+  }, [params.mes, params.anio, params.grupoId, isEnabled]);
 
   useEffect(() => {
     fetchDetails();

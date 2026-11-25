@@ -120,8 +120,32 @@ export const JefeComercialDashboard: React.FC = () => {
     );
 
     const semaforoBody = (row: SemaforoAPI) => {
-        const color = row.semaforo === 'VERDE' ? '#22C55E' : '#EF4444';
-        const label = row.semaforo === 'VERDE' ? 'Al día' : 'Sin Gestión > 48h';
+        let color = '#6B7280';
+        let label = 'Liberado';
+        let icon = 'pi pi-lock-open';
+
+        if (row.semaforo === 'VERDE') {
+            color = '#22C55E';
+            label = 'Al día (<24h)';
+            icon = 'pi pi-lock';
+        } else if (row.semaforo === 'AMARILLO') {
+            color = '#F59E0B';
+            label = 'Pendiente (24h-48h)';
+            icon = 'pi pi-lock';
+        } else if (row.semaforo === 'NARANJA') {
+            color = '#F97316';
+            label = 'Urgente (48h-72h)';
+            icon = 'pi pi-lock';
+        } else if (row.semaforo === 'ROJO') {
+            color = '#EF4444';
+            label = 'Crítico (72h-120h)';
+            icon = 'pi pi-lock';
+        } else if (row.semaforo === 'LIBRE') {
+            color = '#6B7280';
+            label = 'Liberado (>5d)';
+            icon = 'pi pi-lock-open';
+        }
+
         return (
             <Tag 
                 value={label} 
@@ -132,7 +156,7 @@ export const JefeComercialDashboard: React.FC = () => {
                     borderRadius: '20px',
                     fontWeight: 700
                 }} 
-                icon={`pi pi-circle-fill`}
+                icon={`pi ${icon}`}
             />
         );
     };
@@ -165,8 +189,8 @@ export const JefeComercialDashboard: React.FC = () => {
 
     // KPIs counts
     const totalClientes = data.length;
-    const verdes = data.filter(d => d.semaforo === 'VERDE').length;
-    const rojos = data.filter(d => d.semaforo === 'ROJO').length;
+    const verdesYAmarrillos = data.filter(d => d.semaforo === 'VERDE' || d.semaforo === 'AMARILLO').length;
+    const inactivosYLibres = data.filter(d => d.semaforo === 'NARANJA' || d.semaforo === 'ROJO' || d.semaforo === 'LIBRE').length;
 
     return (
         <div className="p-3">
@@ -196,8 +220,8 @@ export const JefeComercialDashboard: React.FC = () => {
                             <i className="pi pi-check-circle" style={{ fontSize: '1.2rem' }} />
                         </div>
                         <div>
-                            <div style={{ color: COLORS.gray500, fontSize: '0.8rem', fontWeight: 600 }}>AL DÍA (VERDE)</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#166534' }}>{verdes}</div>
+                            <div style={{ color: COLORS.gray500, fontSize: '0.8rem', fontWeight: 600 }}>AL DÍA (VERDE / AMARILLO)</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#166534' }}>{verdesYAmarrillos}</div>
                         </div>
                     </div>
                 </div>
@@ -205,14 +229,14 @@ export const JefeComercialDashboard: React.FC = () => {
                     <div style={{ background: COLORS.white, padding: '20px', borderRadius: '16px', border: `1.5px solid ${COLORS.gray100}` }} className="flex align-items-center gap-3">
                         <div style={{ 
                             width: '40px', height: '40px', borderRadius: '12px', 
-                            background: '#FEE2E2', color: '#991B1B', 
+                            background: '#FFF7ED', color: '#C2410C', 
                             display: 'flex', alignItems: 'center', justifyContent: 'center' 
                         }}>
                             <i className="pi pi-exclamation-circle" style={{ fontSize: '1.2rem' }} />
                         </div>
                         <div>
-                            <div style={{ color: COLORS.gray500, fontSize: '0.8rem', fontWeight: 600 }}>FUERA DE TIEMPO (ROJO)</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#991B1B' }}>{rojos}</div>
+                            <div style={{ color: COLORS.gray500, fontSize: '0.8rem', fontWeight: 600 }}>INACTIVOS / LIBRES (NARANJA / ROJO / LIBRE)</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#C2410C' }}>{inactivosYLibres}</div>
                         </div>
                     </div>
                 </div>

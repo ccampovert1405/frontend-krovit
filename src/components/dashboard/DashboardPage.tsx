@@ -26,7 +26,9 @@ import {
   OportunidadAPI,
   apiCreateSeguimiento,
   apiUpdateSeguimiento,
-  apiGetSeguimientosByOportunidad
+  apiGetSeguimientosByOportunidad,
+  apiGetAgencias,
+  AgenciaAPI
 } from '@/services/api';
 import { COLORS, MESES_NOMBRES, ETAPA_COLORS } from '@/utils/constants';
 import { formatUserDisplayName } from '@/utils/formatters';
@@ -41,8 +43,11 @@ import { OportunidadSeguimientoBox } from '../oportunidades/OportunidadSeguimien
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isSuperGerente = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Gerente';
   const isGerenteComercial = user?.rol === 'Gerente Comercial';
-  const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente' || isGerenteComercial;
+  const isGerente = isSuperGerente || isGerenteComercial;
+  const isJefe = user?.rol === 'Jefe Comercial';
+  const isPrivileged = isGerente || isJefe;
 
   const {
     selectedMes,
@@ -54,16 +59,46 @@ export const DashboardPage: React.FC = () => {
     mesActual,
   } = useFilters();
 
+  const [agencias, setAgencias] = React.useState<AgenciaAPI[]>([]);
+  const [selectedAgencia, setSelectedAgencia] = React.useState<string | number>('Todas');
   const [selectedGrupo, setSelectedGrupo] = React.useState<string | number>('Todos');
   const [grupos, setGrupos] = React.useState<GrupoVentasAPI[]>([]);
+  const [agentes, setAgentes] = React.useState<UsuarioAPI[]>([]);
 
   useEffect(() => {
-    if (isGerenteComercial) {
+    if (isGerente) {
+      apiGetAgencias()
+        .then(setAgencias)
+        .catch(console.error);
+    }
+  }, [isGerente]);
+
+  useEffect(() => {
+    if (isPrivileged) {
       apiGetGruposVentas()
         .then(setGrupos)
         .catch(console.error);
     }
-  }, [isGerenteComercial]);
+  }, [isPrivileged]);
+
+  useEffect(() => {
+    if (isPrivileged) {
+      apiGetUsersByRole('Agente Comercial')
+        .then(setAgentes)
+        .catch(console.error);
+    }
+  }, [isPrivileged]);
+
+  const assignedAgency = useMemo(() => {
+    if (!isGerenteComercial) return null;
+    return agencias.find(a => String(a.encargadoId) === String(user?.id));
+  }, [agencias, isGerenteComercial, user]);
+
+  useEffect(() => {
+    if (isGerenteComercial && assignedAgency) {
+      setSelectedAgencia(assignedAgency.id);
+    }
+  }, [assignedAgency, isGerenteComercial]);
 
   const [sinGestion, setSinGestion] = React.useState<OportunidadAPI[]>([]);
   const [loadingSinGestion, setLoadingSinGestion] = React.useState(false);
@@ -186,33 +221,67 @@ export const DashboardPage: React.FC = () => {
     }
   }, [isPrivileged, setSelectedAgente]);
 
-  // Agentes Reales
-  const [agentes, setAgentes] = React.useState<UsuarioAPI[]>([]);
-  useEffect(() => {
-    if (isPrivileged && !isGerenteComercial) {
-      apiGetUsersByRole('Agente Comercial')
-        .then(setAgentes)
-        .catch(console.error);
-    }
-  }, [isPrivileged, isGerenteComercial]);
+  const jefeGrupo = useMemo(() => {
+    if (!isJefe) return null;
+    return grupos.find(g => 
+      String(g.jefeComercialId) === String(user?.id) || 
+      (g.jefeComercial && String(g.jefeComercial.userID) === String(user?.id))
+    );
+  }, [grupos, isJefe, user]);
 
-  // Buscar el userId si el agente seleccionado no es "Todos"
-  const selectedAgentUser = useMemo(() => {
-    if (isGerenteComercial) {
-      if (selectedGrupoObj) {
-        return (selectedGrupoObj.agentes || []).find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
+  const currentAgentes = useMemo(() => {
+    if (isGerente) {
+      if (selectedGrupo !== 'Todos') {
+        const selectedGrupoObj = grupos.find(g => String(g.id) === String(selectedGrupo));
+        return selectedGrupoObj?.agentes || [];
       }
-      return undefined;
+      if (selectedAgencia !== 'Todas') {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+        return agencyGroups.flatMap(g => g.agentes || []);
+      }
+      if (isGerenteComercial && assignedAgency) {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(assignedAgency.id));
+        return agencyGroups.flatMap(g => g.agentes || []);
+      }
+      return agentes;
     }
-    return agentes.find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
-  }, [isGerenteComercial, selectedGrupoObj, agentes, selectedAgente]);
+    if (isJefe) {
+      return jefeGrupo?.agentes || [];
+    }
+    return [];
+  }, [isGerente, isJefe, isGerenteComercial, selectedGrupo, selectedAgencia, grupos, agentes, jefeGrupo, assignedAgency]);
 
-  const groupAgentIds = useMemo(() => {
-    if (isGerenteComercial && selectedGrupoObj) {
-      return new Set((selectedGrupoObj.agentes || []).map(a => a.userID));
+  const selectedAgentUser = useMemo(() => {
+    return currentAgentes.find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
+  }, [currentAgentes, selectedAgente]);
+
+  const allowedAgentIds = useMemo(() => {
+    if (isGerente) {
+      if (selectedGrupo !== 'Todos') {
+        const selectedGrupoObj = grupos.find(g => String(g.id) === String(selectedGrupo));
+        return new Set((selectedGrupoObj?.agentes || []).map(a => String(a.userID)));
+      }
+      if (selectedAgencia !== 'Todas') {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+        return new Set(agencyGroups.flatMap(g => g.agentes || []).map(a => String(a.userID)));
+      }
+      if (isGerenteComercial && assignedAgency) {
+        const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(assignedAgency.id));
+        return new Set(agencyGroups.flatMap(g => g.agentes || []).map(a => String(a.userID)));
+      }
+      return null;
+    }
+    if (isJefe) {
+      const myGroup = grupos.find(g => 
+        String(g.jefeComercialId) === String(user?.id) || 
+        (g.jefeComercial && String(g.jefeComercial.userID) === String(user?.id))
+      );
+      return new Set((myGroup?.agentes || []).map(a => String(a.userID)));
     }
     return null;
-  }, [isGerenteComercial, selectedGrupoObj]);
+  }, [isGerente, isGerenteComercial, isJefe, selectedGrupo, selectedAgencia, grupos, agencias, user, assignedAgency]);
+
+  const groupAgentIds = allowedAgentIds;
 
   const { prospectosFiltrados: rawProspectos, oportunidadesFiltradas: rawOportunidades, tareasFiltradas: rawTareas } = useFilteredData({
     mes: selectedMes,
@@ -221,25 +290,25 @@ export const DashboardPage: React.FC = () => {
   });
 
   const prospectosFiltrados = useMemo(() => {
-    if (isGerenteComercial && selectedGrupo !== 'Todos' && groupAgentIds) {
-      return rawProspectos.filter(p => p.user_create_id && groupAgentIds.has(String(p.user_create_id)));
+    if (groupAgentIds) {
+      return rawProspectos.filter(p => (p.user_create_id && groupAgentIds.has(String(p.user_create_id))) || !p.user_create_id);
     }
     return rawProspectos;
-  }, [rawProspectos, isGerenteComercial, selectedGrupo, groupAgentIds]);
+  }, [rawProspectos, groupAgentIds]);
 
   const oportunidadesFiltradas = useMemo(() => {
-    if (isGerenteComercial && selectedGrupo !== 'Todos' && groupAgentIds) {
-      return rawOportunidades.filter(o => o.user_create_id && groupAgentIds.has(String(o.user_create_id)));
+    if (groupAgentIds) {
+      return rawOportunidades.filter(o => (o.user_create_id && groupAgentIds.has(String(o.user_create_id))) || !o.user_create_id);
     }
     return rawOportunidades;
-  }, [rawOportunidades, isGerenteComercial, selectedGrupo, groupAgentIds]);
+  }, [rawOportunidades, groupAgentIds]);
 
   const tareasFiltradas = useMemo(() => {
-    if (isGerenteComercial && selectedGrupo !== 'Todos' && groupAgentIds) {
-      return rawTareas.filter(t => t.user_create_id && groupAgentIds.has(String(t.user_create_id)));
+    if (groupAgentIds) {
+      return rawTareas.filter(t => (t.user_create_id && groupAgentIds.has(String(t.user_create_id))) || !t.user_create_id);
     }
     return rawTareas;
-  }, [rawTareas, isGerenteComercial, selectedGrupo, groupAgentIds]);
+  }, [rawTareas, groupAgentIds]);
 
   const { indices: dynamicKPIs, loading: loadingIndices } = useDashboardIndices({
     mes: selectedMes,
@@ -272,7 +341,7 @@ export const DashboardPage: React.FC = () => {
     mes: selectedMes,
     anio: currentAnio,
     grupoId: isGerenteComercial && selectedGrupo !== 'Todos' ? selectedGrupo : undefined
-  });
+  }, isPrivileged);
 
   const performanceMetrics = useMemo(() => {
     if (!isPrivileged) return null;
@@ -348,64 +417,86 @@ export const DashboardPage: React.FC = () => {
     value: i,
   }));
 
-  const agentesOptions = useMemo(() => {
+  const agencyOptions = useMemo(() => {
     if (isGerenteComercial) {
-      if (selectedGrupoObj) {
-        return [
-          { label: 'Todos los agentes del grupo', value: 'Todos' },
-          ...(selectedGrupoObj.agentes || []).map(a => {
-            const name = formatUserDisplayName(a.nombres, a.apellidos);
-            return { label: name, value: name };
-          })
-        ];
+      if (assignedAgency) {
+        return [{ label: assignedAgency.nombre, value: assignedAgency.id }];
       }
-      return [{ label: 'Seleccione un grupo', value: 'Todos' }];
+      return [];
     }
     return [
-      { label: 'Todos los agentes', value: 'Todos' },
-      ...agentes.map(a => {
+      { label: 'Todas las agencias', value: 'Todas' },
+      ...agencias.map(a => ({ label: a.nombre, value: a.id }))
+    ];
+  }, [agencias, isGerenteComercial, assignedAgency]);
+
+  const grupoOptions = useMemo(() => {
+    const filtered = selectedAgencia === 'Todas'
+      ? grupos
+      : grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+    return [
+      { label: 'Todos los grupos', value: 'Todos' },
+      ...filtered.map(g => ({ label: g.nombre, value: g.id }))
+    ];
+  }, [grupos, selectedAgencia]);
+
+  const agenteOptions = useMemo(() => {
+    return [
+      { label: isJefe ? 'Todos los agentes del grupo' : 'Todos los agentes', value: 'Todos' },
+      ...currentAgentes.map(a => {
         const name = formatUserDisplayName(a.nombres, a.apellidos);
         return { label: name, value: name };
-      }),
+      })
     ];
-  }, [isGerenteComercial, selectedGrupoObj, agentes]);
-
-  const isJefeComercial = user?.rol === 'Jefe Comercial';
-
-  const gruposOptions = [
-    { label: 'Todos los grupos', value: 'Todos' },
-    ...grupos.map(g => ({ label: g.nombre, value: g.id }))
-  ];
+  }, [currentAgentes, isJefe]);
 
   return (
     <div>
       {/* Header con filtros */}
       <PageHeader title="Dashboard" subtitle="Resumen de tu actividad comercial">
         <div className="flex gap-2 align-items-center flex-wrap">
-          {/* Filtro Grupo - SOLO PARA GERENTE COMERCIAL */}
-          {isGerenteComercial && (
+          {/* Filtro Agencia - SOLO PARA GERENTES */}
+          {isGerente && (
+            <div className="flex align-items-center gap-2">
+              <IconBox icon="pi-building" color={COLORS.blue} bg={COLORS.blueLight} />
+              <Dropdown
+                value={selectedAgencia}
+                options={agencyOptions}
+                onChange={(e) => {
+                  setSelectedAgencia(e.value);
+                  setSelectedGrupo('Todos');
+                  setSelectedAgente('Todos');
+                }}
+                className="w-12rem"
+                placeholder="Seleccionar agencia"
+              />
+            </div>
+          )}
+
+          {/* Filtro Grupo - SOLO PARA GERENTES */}
+          {isGerente && (
             <div className="flex align-items-center gap-2">
               <IconBox icon="pi-sitemap" color={COLORS.blue} bg={COLORS.blueLight} />
               <Dropdown
                 value={selectedGrupo}
-                options={gruposOptions}
+                options={grupoOptions}
                 onChange={(e) => {
                   setSelectedGrupo(e.value);
                   setSelectedAgente('Todos');
                 }}
-                className="w-15rem"
+                className="w-12rem"
                 placeholder="Seleccionar grupo"
               />
             </div>
           )}
 
-          {/* Filtro Agente - SOLO PARA JEFE COMERCIAL Y GERENTE COMERCIAL (si hay grupo seleccionado) */}
-          {(isJefeComercial || (isGerenteComercial && selectedGrupo !== 'Todos')) && (
+          {/* Filtro Agente - PARA GERENTES Y JEFES */}
+          {isPrivileged && (
             <div className="flex align-items-center gap-2">
               <IconBox icon="pi-users" color={COLORS.red} bg={COLORS.redLight} />
               <Dropdown
                 value={selectedAgente}
-                options={agentesOptions}
+                options={agenteOptions}
                 onChange={(e) => setSelectedAgente(e.value)}
                 className="w-12rem"
                 placeholder="Seleccionar agente"
@@ -433,24 +524,30 @@ export const DashboardPage: React.FC = () => {
         <CustomBadge color={COLORS.red} bg={COLORS.redLight}>
           {MESES_NOMBRES[selectedMes]} {new Date().getFullYear()}
         </CustomBadge>
-        {isGerenteComercial && selectedGrupo !== 'Todos' && selectedGrupoObj && (
+        {isGerente && selectedAgencia !== 'Todas' && (
+          <CustomBadge color={COLORS.blue} bg={COLORS.blueLight}>
+            Agencia ID: {selectedAgencia}
+          </CustomBadge>
+        )}
+        {isGerente && selectedGrupo !== 'Todos' && selectedGrupoObj && (
           <CustomBadge color={COLORS.blue} bg={COLORS.blueLight}>
             Grupo: {selectedGrupoObj.nombre}
           </CustomBadge>
         )}
-        {(isJefeComercial || (isGerenteComercial && selectedGrupo !== 'Todos')) && (
+        {isPrivileged && (
           <CustomBadge color={COLORS.green} bg={COLORS.greenLight}>
-            {selectedAgente === 'Todos' ? 'Todos los agentes' : selectedAgente}
+            {selectedAgente === 'Todos' ? (isJefe ? 'Todos los agentes del grupo' : 'Todos los agentes') : selectedAgente}
           </CustomBadge>
         )}
         {hasActiveFilters && (
           <button
             onClick={() => {
               resetFilters();
+              setSelectedAgencia('Todas');
               setSelectedGrupo('Todos');
             }}
             className="text-xs bg-transparent border-none cursor-pointer font-semibold underline"
-            style={{ color: COLORS.red }}
+            style={{ color: 'var(--primary-color)' }}
           >
             Limpiar filtros
           </button>
@@ -542,7 +639,23 @@ export const DashboardPage: React.FC = () => {
           </Card>
 
           {/* Contenido Principal: Grilla o Lista */}
-          {isPrivileged && performanceMetrics && (
+          {isGerenteComercial && selectedGrupo === 'Todos' && (
+            <Card className="mb-4 shadow-1 text-center py-5" style={{ borderRadius: '16px' }}>
+              <i className="pi pi-users text-400 mb-3" style={{ fontSize: '2.5rem', color: COLORS.gray400 }} />
+              <div className="font-bold text-gray-700 text-lg">Visualización de Agentes</div>
+              <div className="text-gray-500 text-sm mt-1">Selecciona un grupo de ventas arriba para visualizar el rendimiento de sus agentes.</div>
+            </Card>
+          )}
+
+          {isGerenteComercial && selectedGrupo !== 'Todos' && performanceMetrics && performanceMetrics.data.length === 0 && (
+            <Card className="mb-4 shadow-1 text-center py-5" style={{ borderRadius: '16px' }}>
+              <i className="pi pi-users text-400 mb-3" style={{ fontSize: '2.5rem', color: COLORS.gray400 }} />
+              <div className="font-bold text-gray-700 text-lg">Sin Agentes Asignados</div>
+              <div className="text-gray-500 text-sm mt-1">Este grupo de ventas no tiene agentes registrados para este período.</div>
+            </Card>
+          )}
+
+          {isPrivileged && performanceMetrics && performanceMetrics.data.length > 0 && (
             <div className="grid mb-4">
               {performanceMetrics.data.map((item, idx) => (
                 <div key={idx} className={`col-12 ${performanceMetrics.isBatch ? 'md:col-6' : ''}`}>
@@ -635,7 +748,7 @@ export const DashboardPage: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right ml-3">
-                        <span className="font-bold text-sm" style={{ color: 'var(--primary-color)' }}>
+                        <span className="font-bold text-red-600 text-sm" style={{ color: 'var(--primary-color)' }}>
                           {dias} día{dias !== 1 ? 's' : ''}
                         </span>
                       </div>
@@ -709,7 +822,7 @@ export const DashboardPage: React.FC = () => {
             body={(op) => {
               const dias = getDiasSinGestion(op.created_at);
               return (
-                 <span className="font-bold" style={{ color: 'var(--primary-color)' }}>
+                <span className="font-bold text-red-600" style={{ color: 'var(--primary-color)' }}>
                   {dias} día{dias !== 1 ? 's' : ''}
                 </span>
               );

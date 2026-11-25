@@ -7,4 +7,5 @@ export {
     apiAssignAgentesToGrupo as assignAgentesToGrupo,
     apiRemoveAgenteFromGrupo as removeAgenteFromGrupo,
     apiGetUsers as getUsuarios,
+    apiGetAgencias as getAgencias,
 } from '@/services/api';

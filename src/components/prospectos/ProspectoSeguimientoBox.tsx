@@ -40,8 +40,8 @@ export const ProspectoSeguimientoBox: React.FC<Props> = ({ prospecto, onSaveSegu
     const TIPO_OPTS = Object.values(EstadoSeguimiento).map(val => ({ label: val, value: val }));
     const ESTADO_OPTS = Object.values(EstadoOportunidadSeguimiento).map(val => ({ label: val, value: val }));
 
-    // Lógica de semáforo (rojo si han pasado más de 48 horas sin acciones)
-    const { semaforo } = useMemo(() => {
+    // Lógica de semáforo (horas transcurridas)
+    const { semaforoColor, semaforoIcon } = useMemo(() => {
         const now = new Date().getTime();
         const createdTime = prospecto.created_at ? new Date(prospecto.created_at).getTime() : now;
         
@@ -53,11 +53,16 @@ export const ProspectoSeguimientoBox: React.FC<Props> = ({ prospecto, onSaveSegu
 
         const diffMs = now - lastActionTime;
         const diffHours = diffMs / (1000 * 60 * 60);
-        const isRed = diffHours > 48;
 
-        return {
-            semaforo: isRed ? 'red' : 'green'
-        };
+        if (diffHours <= 24) {
+            return { semaforoColor: '#22C55E', semaforoIcon: 'pi-check' };
+        } else if (diffHours <= 48) {
+            return { semaforoColor: '#F59E0B', semaforoIcon: 'pi-check' };
+        } else if (diffHours <= 72) {
+            return { semaforoColor: '#F97316', semaforoIcon: 'pi-exclamation-triangle' };
+        } else {
+            return { semaforoColor: '#EF4444', semaforoIcon: 'pi-exclamation-triangle' };
+        }
     }, [prospecto, seguimientos]);
 
     const handleOpenNew = () => {
@@ -156,12 +161,12 @@ export const ProspectoSeguimientoBox: React.FC<Props> = ({ prospecto, onSaveSegu
             <div className="flex align-items-center justify-content-between mb-4 mt-2">
                 <div className="flex align-items-center gap-3">
                     <IconBox 
-                        icon={semaforo === 'green' ? 'pi-check' : 'pi-exclamation-triangle'}
+                        icon={semaforoIcon}
                         color="white"
-                        bg={semaforo === 'green' ? '#22C55E' : '#EF4444'}
+                        bg={semaforoColor}
                         size="36px"
                         iconSize="0.9rem"
-                        style={{ boxShadow: `0 4px 12px ${semaforo === 'green' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}
+                        style={{ boxShadow: `0 4px 12px ${semaforoColor}80` }}
                     />
                     <div>
                         <div style={{ fontWeight: 800, fontSize: '1.25rem', color: COLORS.black, letterSpacing: '-0.5px' }}>Historial de Seguimientos</div>

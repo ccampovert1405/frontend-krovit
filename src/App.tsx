@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'; // v2.1.0-refresh
+import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { PrimeReactProvider } from 'primereact/api';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Sidebar } from '@/components/layout/Sidebar';
+import { Sidebar, BottomNav } from '@/components/layout/Sidebar';
 import { DashboardPage } from '@/components/dashboard/DashboardPage';
 import { DashboardLeadsPage } from '@/components/dashboard-leads';
 import { DashboardGerentePage } from '@/components/dashboard-gerente';
@@ -23,6 +24,7 @@ import { UsuariosPage } from '@/components/usuarios';
 import { RolesPage } from '@/components/roles';
 import { PermisosPage } from '@/components/permisos';
 import { GruposVentasPage } from '@/components/grupos-ventas';
+import { AgenciasPage } from '@/components/agencias';
 import { ListasPrecioPage } from '@/components/listas-precio';
 import { PlazosPage } from '@/components/plazos';
 import { FinanciamientosPage } from '@/components/financiamientos';
@@ -145,7 +147,7 @@ const AppContent: React.FC = () => {
         <div className="flex align-items-center gap-3">
           <NotificationBell />
           <button
-            className="topbar__hamburger"
+            className="topbar__hamburger--desktop"
             onClick={() => setIsSidebarOpen(true)}
             aria-label="Abrir menú"
           >
@@ -160,6 +162,12 @@ const AppContent: React.FC = () => {
         isOpen={isSidebarOpen}
         isCollapsed={isSidebarCollapsed}
         onClose={() => setIsSidebarOpen(false)}
+      />
+
+      {/* Bottom Navigation Bar (Mobile) */}
+      <BottomNav
+        activeKey={getActivePage()}
+        onOpenMenu={() => setIsSidebarOpen(true)}
       />
 
       {/* Main Content */}
@@ -181,6 +189,7 @@ const AppContent: React.FC = () => {
             <Route path="/permisos" element={<AuthGuard><PermisosPage /></AuthGuard>} />
             <Route path="/leads" element={<AuthGuard><LeadsPage /></AuthGuard>} />
             <Route path="/grupos-ventas" element={<AuthGuard><GruposVentasPage /></AuthGuard>} />
+            <Route path="/agencias" element={<AuthGuard permission="agencias.read"><AgenciasPage /></AuthGuard>} />
             <Route path="/listas-precio" element={<AuthGuard><ListasPrecioPage /></AuthGuard>} />
             <Route path="/plazos" element={<AuthGuard><PlazosPage /></AuthGuard>} />
             <Route path="/financiamientos" element={<AuthGuard><FinanciamientosPage /></AuthGuard>} />
@@ -205,6 +214,7 @@ const App: React.FC = () => {
         <NotificationProvider>
           <AuthProvider>
             <AppContent />
+            <PWAInstallPrompt />
           </AuthProvider>
         </NotificationProvider>
       </TenantConfigProvider>

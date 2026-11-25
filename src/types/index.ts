@@ -244,6 +244,7 @@ export type PageKey =
   | 'permisos'
   | 'leads'
   | 'grupos-ventas'
+  | 'agencias'
   | 'listas-precio'
   | 'plazos'
   | 'financiamientos';
@@ -295,4 +296,16 @@ export interface RealtimeNotification {
   mensaje: string;
   leido: boolean;
   createdAt: string;
+}
+
+// ─── Agencias ───
+export interface AgenciaAPI {
+  id: number;
+  nombre: string;
+  direccion?: string;
+  telefono?: string;
+  encargado?: any;
+  encargadoId?: string;
+  created_at?: string;
+  updated_at?: string;
 }

@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Button } from 'primereact/button';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { Dialog } from 'primereact/dialog';
+import { TabView, TabPanel } from 'primereact/tabview';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { InputText } from 'primereact/inputtext';
@@ -14,17 +15,17 @@ import {
     ETAPA_OPORTUNIDAD_COLORS,
     MESES_NOMBRES,
 } from '@/utils/constants';
-import { apiGetUsersByRole, UsuarioAPI } from '@/services/api';
+import { apiGetUsersByRole, UsuarioAPI, apiGetPlanFinanciero, apiCreateSeguimiento, apiUpdateSeguimiento, apiGetSeguimientosByOportunidad, apiGetGruposVentas, GrupoVentasAPI, apiGetAgencias, AgenciaAPI } from '@/services/api';
 import { formatUserDisplayName } from '@/utils/formatters';
 import { Oportunidad, EtapaOportunidad, PlanFinancieroData } from '@/types';
 import { NuevaOportunidadModal, NuevaOportunidadForm } from './NuevaOportunidadModal';
 import { EditarOportunidadModal } from './EditarOportunidadModal';
 import { PlanFinanciero } from './PlanFinanciero';
-import { apiGetPlanFinanciero } from '@/services/api';
 import { TareasOportunidadModal } from './TareasOportunidadModal';
 import { useNotification } from '@/context/NotificationContext';
 import { apiExportOportunidadesExcel } from '@/services/api';
 import { notifyApiError } from '@/utils/errorHelpers';
+import { OportunidadSeguimientoBox } from './OportunidadSeguimientoBox';
 
 // ════════════════════════════════════════════════════════════
 // TIPOS DE PRODUCTO — Emojis y Colores
@@ -59,10 +60,34 @@ export const OportunidadesPage: React.FC = () => {
         mesActual,
     } = useFilters();
 
-    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial';
+    const isSuperGerente = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Gerente';
+    const isGerenteComercial = user?.rol === 'Gerente Comercial';
+    const isGerente = isSuperGerente || isGerenteComercial;
+    const isJefe = user?.rol === 'Jefe Comercial';
+    const isPrivileged = isGerente || isJefe;
 
-    // Agentes Reales
+    const [agencias, setAgencias] = React.useState<AgenciaAPI[]>([]);
+    const [selectedAgencia, setSelectedAgencia] = React.useState<string | number>('Todas');
+    const [grupos, setGrupos] = React.useState<GrupoVentasAPI[]>([]);
+    const [selectedGrupo, setSelectedGrupo] = React.useState<string | number>('Todos');
     const [agentes, setAgentes] = React.useState<UsuarioAPI[]>([]);
+
+    useEffect(() => {
+        if (isGerente) {
+            apiGetAgencias()
+                .then(setAgencias)
+                .catch(console.error);
+        }
+    }, [isGerente]);
+
+    useEffect(() => {
+        if (isPrivileged) {
+            apiGetGruposVentas()
+                .then(setGrupos)
+                .catch(console.error);
+        }
+    }, [isPrivileged]);
+
     useEffect(() => {
         if (isPrivileged) {
             apiGetUsersByRole('Agente Comercial')
@@ -71,7 +96,109 @@ export const OportunidadesPage: React.FC = () => {
         }
     }, [isPrivileged]);
 
-    const selectedAgentUser = agentes.find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
+    const assignedAgency = useMemo(() => {
+        if (!isGerenteComercial) return null;
+        return agencias.find(a => String(a.encargadoId) === String(user?.id));
+    }, [agencias, isGerenteComercial, user]);
+
+    useEffect(() => {
+        if (isGerenteComercial && assignedAgency) {
+            setSelectedAgencia(assignedAgency.id);
+        }
+    }, [assignedAgency, isGerenteComercial]);
+
+    const jefeGrupo = useMemo(() => {
+        if (!isJefe) return null;
+        return grupos.find(g => 
+            String(g.jefeComercialId) === String(user?.id) || 
+            (g.jefeComercial && String(g.jefeComercial.userID) === String(user?.id))
+        );
+    }, [grupos, isJefe, user]);
+
+    const currentAgentes = useMemo(() => {
+        if (isGerente) {
+            if (selectedGrupo !== 'Todos') {
+                const selectedGrupoObj = grupos.find(g => String(g.id) === String(selectedGrupo));
+                return selectedGrupoObj?.agentes || [];
+            }
+            if (selectedAgencia !== 'Todas') {
+                const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+                return agencyGroups.flatMap(g => g.agentes || []);
+            }
+            if (isGerenteComercial && assignedAgency) {
+                const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(assignedAgency.id));
+                return agencyGroups.flatMap(g => g.agentes || []);
+            }
+            return agentes;
+        }
+        if (isJefe) {
+            return jefeGrupo?.agentes || [];
+        }
+        return [];
+    }, [isGerente, isJefe, isGerenteComercial, selectedGrupo, selectedAgencia, grupos, agentes, jefeGrupo, assignedAgency]);
+
+    const selectedAgentUser = useMemo(() => {
+        return currentAgentes.find(a => formatUserDisplayName(a.nombres, a.apellidos) === selectedAgente);
+    }, [currentAgentes, selectedAgente]);
+
+    const allowedAgentIds = useMemo(() => {
+        if (isGerente) {
+            if (selectedGrupo !== 'Todos') {
+                const selectedGrupoObj = grupos.find(g => String(g.id) === String(selectedGrupo));
+                return new Set((selectedGrupoObj?.agentes || []).map(a => String(a.userID)));
+            }
+            if (selectedAgencia !== 'Todas') {
+                const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+                return new Set(agencyGroups.flatMap(g => g.agentes || []).map(a => String(a.userID)));
+            }
+            if (isGerenteComercial && assignedAgency) {
+                const agencyGroups = grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(assignedAgency.id));
+                return new Set(agencyGroups.flatMap(g => g.agentes || []).map(a => String(a.userID)));
+            }
+            return null;
+        }
+        if (isJefe) {
+            const myGroup = grupos.find(g => 
+                String(g.jefeComercialId) === String(user?.id) || 
+                (g.jefeComercial && String(g.jefeComercial.userID) === String(user?.id))
+            );
+            return new Set((myGroup?.agentes || []).map(a => String(a.userID)));
+        }
+        return null;
+    }, [isGerente, isGerenteComercial, isJefe, selectedGrupo, selectedAgencia, grupos, agencias, user, assignedAgency]);
+
+    const agencyOptions = useMemo(() => {
+        if (isGerenteComercial) {
+            if (assignedAgency) {
+                return [{ label: assignedAgency.nombre, value: assignedAgency.id }];
+            }
+            return [];
+        }
+        return [
+            { label: 'Todas las agencias', value: 'Todas' },
+            ...agencias.map(a => ({ label: a.nombre, value: a.id }))
+        ];
+    }, [agencias, isGerenteComercial, assignedAgency]);
+
+    const grupoOptions = useMemo(() => {
+        const filtered = selectedAgencia === 'Todas'
+            ? grupos
+            : grupos.filter(g => g.agenciaId && String(g.agenciaId) === String(selectedAgencia));
+        return [
+            { label: 'Todos los grupos', value: 'Todos' },
+            ...filtered.map(g => ({ label: g.nombre, value: g.id }))
+        ];
+    }, [grupos, selectedAgencia]);
+
+    const agenteOptions = useMemo(() => {
+        return [
+            { label: isJefe ? 'Todos los agentes del grupo' : 'Todos los agentes', value: 'Todos' },
+            ...currentAgentes.map(a => {
+                const name = formatUserDisplayName(a.nombres, a.apellidos);
+                return { label: name, value: name };
+            })
+        ];
+    }, [currentAgentes, isJefe]);
 
     const {
         oportunidades,
@@ -121,67 +248,138 @@ export const OportunidadesPage: React.FC = () => {
     useEffect(() => {
         if (!detailOp) { setPlanData(null); return; }
 
-        // Si ya viene el planData mapeado (del listado), lo usamos directo
+        // 1. Cargar Plan Financiero
         if (detailOp.planData) {
             setPlanData(detailOp.planData);
-            return;
+        } else {
+            setPlanLoading(true);
+            apiGetPlanFinanciero(detailOp.id)
+                .then((raw: any) => {
+                    const mapped: PlanFinancieroData = {
+                        producto: detailOp.producto || '',
+                        subProducto: raw.subProducto || raw.detalle || detailOp.subProducto || '',
+                        montoBase: Number(raw.monto || raw.monto_base || 0),
+                        montoFinal: Number(raw.monto_final || raw.monto || 0),
+                        inscripcion: Number(raw.valor_inscripcion || raw.inscripcion || 0),
+                        cuotaMensual: Number(raw.valor_cuota || raw.cuota_mensual || 0),
+                        compromiso: raw.financiamiento ? {
+                            tipo: String(raw.financiamiento.tipo || '0'),
+                            cuotas: Number(raw.financiamiento.cuotas || 0),
+                            valor_financiamiento: Number(raw.valor_financiamiento || 0)
+                        } : undefined
+                    };
+                    setPlanData(mapped);
+                })
+                .catch(() => setPlanData(null))
+                .finally(() => setPlanLoading(false));
         }
 
-        setPlanLoading(true);
-        apiGetPlanFinanciero(detailOp.id)
-            .then((raw: any) => {
-                // Mapear los datos que vienen en snake_case
-                const mapped: PlanFinancieroData = {
-                    producto: detailOp.producto || '',
-                    subProducto: raw.subProducto || raw.detalle || detailOp.subProducto || '',
-                    montoBase: Number(raw.monto || raw.monto_base || 0),
-                    montoFinal: Number(raw.monto_final || raw.monto || 0),
-                    inscripcion: Number(raw.valor_inscripcion || raw.inscripcion || 0),
-                    cuotaMensual: Number(raw.valor_cuota || raw.cuota_mensual || 0),
-                    compromiso: raw.financiamiento ? {
-                        tipo: String(raw.financiamiento.tipo || '0'),
-                        cuotas: Number(raw.financiamiento.cuotas || 0),
-                        valor_financiamiento: Number(raw.valor_financiamiento || 0)
-                    } : undefined
-                };
-                setPlanData(mapped);
+        // 2. Cargar Seguimientos del Backend
+        apiGetSeguimientosByOportunidad(detailOp.id)
+            .then((segs) => {
+                const mapped: any[] = segs.map(s => ({
+                    ...s,
+                    id: s.id,
+                    fecha_registro: s.fecha_registro,
+                    estado: s.estado,
+                    tipo_seguimiento: s.tipo_seguimiento,
+                    gestion_realizada: s.gestion_realizada
+                }));
+                setDetailOp(prev => prev ? { ...prev, seguimientos: mapped } : null);
             })
-            .catch(() => setPlanData(null))
-            .finally(() => setPlanLoading(false));
-    }, [detailOp]);
+            .catch(err => console.error("Error loading trackings", err));
+    }, [detailOp?.id]);
+
+    const handleSaveSeguimiento = async (opId: string | number, data: any) => {
+        try {
+            setSaving(true);
+            if (data.id) {
+                // Actualizar existente
+                await apiUpdateSeguimiento(String(data.id), data);
+                showSuccess('Seguimiento actualizado exitosamente.', 'Actualizado');
+            } else {
+                // Crear nuevo
+                await apiCreateSeguimiento({
+                    ...data,
+                    oportunidad_id: opId,
+                });
+                showSuccess('Seguimiento registrado exitosamente.', 'Guardado');
+            }
+            
+            // Recargar seguimientos para asegurar consistencia
+            const segs = await apiGetSeguimientosByOportunidad(opId);
+            const mapped: any[] = segs.map(s => ({
+                ...s,
+                id: s.id,
+                fecha_registro: s.fecha_registro,
+                estado: s.estado,
+                tipo_seguimiento: s.tipo_seguimiento,
+                gestion_realizada: s.gestion_realizada
+            }));
+
+            if (detailOp) {
+                setDetailOp({
+                    ...detailOp,
+                    seguimientos: mapped,
+                    // Actualizar etapa de la oportunidad si el último seguimiento cerró la venta o la dio por caída
+                    etapa: (data.estado === 'Cerrada' || data.tipo_seguimiento === 'NO INTERESA' || data.tipo_seguimiento === 'NÚMERO EQUIVOCADO') 
+                        ? (data.estado === 'Cerrada' ? 'Ganada' : 'Caída') as any 
+                        : detailOp.etapa
+                });
+            }
+        } catch (err: any) {
+            const msg = err.response?.data?.message || 'Error al procesar seguimiento';
+            showError(msg, 'Error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const groupAgentIds = allowedAgentIds;
+
+    const groupFilteredOportunidades = useMemo(() => {
+        if (groupAgentIds) {
+            return oportunidades.filter(o => (o.user_create_id && groupAgentIds.has(String(o.user_create_id))) || !o.user_create_id);
+        }
+        return oportunidades;
+    }, [oportunidades, groupAgentIds]);
 
     // ─── KPIs ────────────────────────────────────────────────
-    const pipeline = oportunidades.filter((o: Oportunidad) => !['Ganada', 'Perdida'].includes(o.etapa));
-    const totalForecast = pipeline.reduce((s: number, o: Oportunidad) => s + o.valor, 0);
+    const pipeline = useMemo(() => groupFilteredOportunidades.filter((o: Oportunidad) => !['Ganada', 'Perdida'].includes(o.etapa)), [groupFilteredOportunidades]);
+    const totalForecast = useMemo(() => pipeline.reduce((s: number, o: Oportunidad) => s + o.valor, 0), [pipeline]);
 
-    const ganadas = oportunidades.filter((o: Oportunidad) => o.etapa === 'Ganada');
-    const valorGanado = ganadas.reduce((s: number, o: Oportunidad) => s + o.valor, 0);
-    const inscripcionesGanadas = ganadas.reduce((s: number, o: Oportunidad) => s + (o.planData?.inscripcion ?? 0), 0);
+    const ganadas = useMemo(() => groupFilteredOportunidades.filter((o: Oportunidad) => o.etapa === 'Ganada'), [groupFilteredOportunidades]);
+    const valorGanado = useMemo(() => ganadas.reduce((s: number, o: Oportunidad) => s + o.valor, 0), [ganadas]);
+    const inscripcionesGanadas = useMemo(() => ganadas.reduce((s: number, o: Oportunidad) => s + (o.planData?.inscripcion ?? 0), 0), [ganadas]);
 
-    const perdidas = oportunidades.filter((o: Oportunidad) => ['Perdida', 'Caída'].includes(o.etapa));
+    const perdidas = useMemo(() => groupFilteredOportunidades.filter((o: Oportunidad) => ['Perdida', 'Caída'].includes(o.etapa)), [groupFilteredOportunidades]);
 
     // ─── Agrupación por etapa ─────────────────────────────────
-    const grouped = ETAPAS_KANBAN.reduce((acc: Record<EtapaKanban, Oportunidad[]>, etapa: EtapaKanban) => {
-        acc[etapa] = oportunidades.filter((o: Oportunidad) => {
-            if (etapa === 'Perdida') return ['Perdida', 'Caída'].includes(o.etapa);
-            return o.etapa === (etapa as EtapaOportunidad);
+    const grouped = useMemo(() => {
+        return ETAPAS_KANBAN.reduce((acc: Record<EtapaKanban, Oportunidad[]>, etapa: EtapaKanban) => {
+            acc[etapa] = groupFilteredOportunidades.filter((o: Oportunidad) => {
+                if (etapa === 'Perdida') return ['Perdida', 'Caída'].includes(o.etapa);
+                return o.etapa === (etapa as EtapaOportunidad);
+            });
+            return acc;
+        }, {} as Record<EtapaKanban, Oportunidad[]>);
+    }, [groupFilteredOportunidades]);
+
+    const filteredOportunidades = useMemo(() => {
+        return groupFilteredOportunidades.filter(op => {
+            const matchesStage = selectedEtapa === 'Todas' ||
+                (selectedEtapa === 'Caída' ? ['Perdida', 'Caída'].includes(op.etapa) : op.etapa === selectedEtapa);
+
+            const matchesProduct = selectedProducto === 'Todos' || op.producto === selectedProducto;
+
+            const search = globalFilter.toLowerCase();
+            const matchesSearch = !search ||
+                op.nombre.toLowerCase().includes(search) ||
+                op.cliente.toLowerCase().includes(search);
+
+            return matchesStage && matchesProduct && matchesSearch;
         });
-        return acc;
-    }, {} as Record<EtapaKanban, Oportunidad[]>);
-
-    const filteredOportunidades = oportunidades.filter(op => {
-        const matchesStage = selectedEtapa === 'Todas' ||
-            (selectedEtapa === 'Caída' ? ['Perdida', 'Caída'].includes(op.etapa) : op.etapa === selectedEtapa);
-
-        const matchesProduct = selectedProducto === 'Todos' || op.producto === selectedProducto;
-
-        const search = globalFilter.toLowerCase();
-        const matchesSearch = !search ||
-            op.nombre.toLowerCase().includes(search) ||
-            op.cliente.toLowerCase().includes(search);
-
-        return matchesStage && matchesProduct && matchesSearch;
-    });
+    }, [groupFilteredOportunidades, selectedEtapa, selectedProducto, globalFilter]);
 
     // ─── Templates para DataTable ───────────────────────────
     const nombreBodyTemplate = (op: Oportunidad) => (
@@ -264,19 +462,6 @@ export const OportunidadesPage: React.FC = () => {
 
     const actionBodyTemplate = (op: Oportunidad) => (
         <div className="flex align-items-center gap-2">
-            <Button
-                icon="pi pi-eye"
-                text
-                rounded
-                className="p-button-plain"
-                tooltip="Ver Tareas"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedOpForTasks(op);
-                    setShowTareasModal(true);
-                }}
-            />
-
             <Button
                 icon="pi pi-pencil"
                 text
@@ -432,19 +617,48 @@ export const OportunidadesPage: React.FC = () => {
 
             <PageHeader title="Oportunidades" subtitle="Gestión y rastreo de tu pipeline comercial">
                 <div className="flex gap-2 align-items-center flex-wrap">
-                    {/* Filtro Agente - SOLO PARA JEFE COMERCIAL Y ADMIN */}
+                    {/* Filtro Agencia - SOLO PARA GERENTES */}
+                    {isGerente && (
+                        <div className="flex align-items-center gap-2">
+                            <IconBox icon="pi-building" color={COLORS.blue} bg={COLORS.blueLight} />
+                            <Dropdown
+                                value={selectedAgencia}
+                                options={agencyOptions}
+                                onChange={(e) => {
+                                    setSelectedAgencia(e.value);
+                                    setSelectedGrupo('Todos');
+                                    setSelectedAgente('Todos');
+                                }}
+                                className="w-12rem"
+                                placeholder="Seleccionar agencia"
+                            />
+                        </div>
+                    )}
+
+                    {/* Filtro Grupo - SOLO PARA GERENTES */}
+                    {isGerente && (
+                        <div className="flex align-items-center gap-2">
+                            <IconBox icon="pi-sitemap" color={COLORS.blue} bg={COLORS.blueLight} />
+                            <Dropdown
+                                value={selectedGrupo}
+                                options={grupoOptions}
+                                onChange={(e) => {
+                                    setSelectedGrupo(e.value);
+                                    setSelectedAgente('Todos');
+                                }}
+                                className="w-12rem"
+                                placeholder="Seleccionar grupo"
+                            />
+                        </div>
+                    )}
+
+                    {/* Filtro Agente - PARA GERENTES Y JEFES */}
                     {isPrivileged && (
                         <div className="flex align-items-center gap-2">
                             <IconBox icon="pi-users" color={COLORS.red} bg={COLORS.redLight} />
                             <Dropdown
                                 value={selectedAgente}
-                                options={[
-                                    { label: 'Todos los agentes', value: 'Todos' },
-                                    ...agentes.map(a => {
-                                        const name = formatUserDisplayName(a.nombres, a.apellidos);
-                                        return { label: name, value: name };
-                                    })
-                                ]}
+                                options={agenteOptions}
                                 onChange={(e) => setSelectedAgente(e.value)}
                                 className="w-12rem"
                                 placeholder="Seleccionar agente"
@@ -534,13 +748,13 @@ export const OportunidadesPage: React.FC = () => {
                 border: `1.5px solid ${COLORS.gray100}`,
                 marginBottom: '40px'
             }}>
-                <div className="flex justify-content-between align-items-center mb-5">
+                <div className="flex justify-content-between align-items-center mb-5 flex-wrap card-header-filters" style={{ gap: '12px' }}>
                     <div>
                         <div style={{ fontWeight: 800, fontSize: '1.25rem', color: COLORS.black }}>Oportunidades Comerciales</div>
                         <div style={{ color: COLORS.gray400, fontSize: '0.85rem', marginTop: '4px' }}>Gestiona y rastrea el progreso de tus ventas</div>
                     </div>
-                    <div className="flex gap-3">
-                        <span className="p-input-icon-left" style={{
+                    <div className="flex gap-3 flex-wrap filters-row" style={{ alignItems: 'center' }}>
+                        <span className="p-input-icon-left filter-item-search" style={{
                             width: '280px',
                             display: 'flex',
                             alignItems: 'center',
@@ -567,7 +781,9 @@ export const OportunidadesPage: React.FC = () => {
                                 }}
                             />
                         </span>
+
                         <Dropdown
+                            className="filter-item-dropdown"
                             value={selectedProducto}
                             options={[
                                 { label: 'Todas las Categorías', value: 'Todos' },
@@ -588,34 +804,85 @@ export const OportunidadesPage: React.FC = () => {
                         <Button
                             label="Nueva Oportunidad"
                             icon="pi pi-plus"
-                            className="btn-brand"
+                            className="btn-brand filter-item-btn"
                             onClick={openModal}
                             style={{ borderRadius: '12px', background: COLORS.red, border: 'none', fontSize: '0.9rem', fontWeight: 600 }}
                         />
                     </div>
                 </div>
 
-                <DataTable
-                    value={filteredOportunidades}
-                    paginator
-                    rows={10}
-                    loading={loading}
-                    className="datatable-premium"
-                    onRowClick={(e) => setDetailOp(e.data as Oportunidad)}
-                    rowClassName={() => 'cursor-pointer'}
-                    emptyMessage="No se encontraron oportunidades"
-                    currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} registros"
-                    paginatorTemplate="CurrentPageReport PrevPageLink PageLinks NextPageLink"
-                >
-                    <Column field="user_create_id" header="AGENTE" body={agenteBodyTemplate} alignHeader="left" align="left" />
-                    <Column field="nombre" header="OPORTUNIDAD" body={nombreBodyTemplate} style={{ minWidth: '280px' }} alignHeader="left" align="left" />
-                    <Column field="cliente" header="CLIENTE" body={clienteBodyTemplate} alignHeader="left" align="left" />
-                    <Column field="etapa" header="ETAPA" body={etapaBodyTemplate} alignHeader="left" align="left" />
-                    <Column header="TIEMPO" body={tiempoBodyTemplate} alignHeader="left" align="left" />
-                    <Column field="valor" header="MONTO" body={montoBodyTemplate} alignHeader="left" align="left" />
-                    <Column field="created_at" header="FECHA CREACIÓN" sortable body={fechaCreacionBodyTemplate} alignHeader="left" align="left" />
-                    <Column header="ACCIONES" body={actionBodyTemplate} alignHeader="left" align="left" />
-                </DataTable>
+                <div className="mobile-show-cards">
+
+                    {/* Vista de Tarjetas (Mobile) */}
+                    <div className="mobile-card-list">
+                        {loading ? (
+                            <div style={{ textAlign: 'center', padding: '40px', color: COLORS.gray400 }}>
+                                <i className="pi pi-spin pi-spinner" style={{ fontSize: '2rem' }} />
+                            </div>
+                        ) : filteredOportunidades.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '32px', color: COLORS.gray400 }}>
+                                <i className="pi pi-money-bill" style={{ fontSize: '2.5rem', marginBottom: '8px', display: 'block' }} />
+                                <div style={{ fontWeight: 600 }}>No se encontraron oportunidades</div>
+                            </div>
+                        ) : filteredOportunidades.map(op => {
+                            const etapaColor = (ETAPA_OPORTUNIDAD_COLORS as Record<string, string>)[op.etapa] ?? COLORS.gray400;
+                            const agente = op.user_create;
+                            const agentName = agente
+                                ? `${agente.nombres} ${agente.apellidos}`.trim()
+                                : (op.agente || '—');
+                            return (
+                                <div key={op.id} className="mobile-card-item" onClick={() => setDetailOp(op)}>
+                                    <div className="mobile-card-item__header">
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div className="mobile-card-item__name">{op.nombre}</div>
+                                            <div className="mobile-card-item__sub">{op.cliente}</div>
+                                        </div>
+                                        <div style={{ fontWeight: 800, color: COLORS.red, fontSize: '1rem', whiteSpace: 'nowrap' }}>
+                                            ${op.valor.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div className="mobile-card-item__meta">
+                                        <span style={{ background: `${etapaColor}18`, color: etapaColor, borderRadius: '8px', padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700 }}>{op.etapa}</span>
+                                        <span style={{ background: op.producto === 'Vehículo' ? '#EFF6FF' : '#F0FDF4', color: op.producto === 'Vehículo' ? '#3B82F6' : '#22C55E', borderRadius: '8px', padding: '3px 8px', fontSize: '0.68rem', fontWeight: 700 }}>
+                                            {op.producto === 'Vehículo' ? '🚗' : '🏠'} {op.producto}
+                                        </span>
+                                        <span style={{ fontSize: '0.75rem', color: COLORS.gray400 }}>
+                                            <i className="pi pi-user" style={{ marginRight: '4px', fontSize: '0.7rem' }} />{agentName}
+                                        </span>
+                                    </div>
+                                    <div className="mobile-card-item__actions" onClick={e => e.stopPropagation()}>
+                                        <Button label="Detalle" icon="pi pi-eye" size="small" outlined onClick={() => setDetailOp(op)} style={{ flex: 1, fontSize: '0.78rem', borderRadius: '10px' }} />
+                                        <Button icon="pi pi-pencil" size="small" text onClick={() => setEditingOp(op)} style={{ borderRadius: '10px', minWidth: '44px' }} />
+                                        <Button icon="pi pi-trash" size="small" text severity="danger" onClick={() => handleDelete(op)} style={{ borderRadius: '10px', minWidth: '44px' }} />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* DataTable (Desktop) */}
+                    <DataTable
+                        value={filteredOportunidades}
+                        paginator
+                        rows={10}
+                        loading={loading}
+                        className="datatable-premium"
+                        onRowClick={(e) => setDetailOp(e.data as Oportunidad)}
+                        rowClassName={() => 'cursor-pointer'}
+                        emptyMessage="No se encontraron oportunidades"
+                        currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} registros"
+                        paginatorTemplate="CurrentPageReport PrevPageLink PageLinks NextPageLink"
+                    >
+                        <Column field="user_create_id" header="AGENTE" body={agenteBodyTemplate} alignHeader="left" align="left" />
+                        <Column field="nombre" header="OPORTUNIDAD" body={nombreBodyTemplate} style={{ minWidth: '280px' }} alignHeader="left" align="left" />
+                        <Column field="cliente" header="CLIENTE" body={clienteBodyTemplate} alignHeader="left" align="left" />
+                        <Column field="etapa" header="ETAPA" body={etapaBodyTemplate} alignHeader="left" align="left" />
+                        <Column header="TIEMPO" body={tiempoBodyTemplate} alignHeader="left" align="left" />
+                        <Column field="valor" header="MONTO" body={montoBodyTemplate} alignHeader="left" align="left" />
+                        <Column field="created_at" header="FECHA CREACIÓN" sortable body={fechaCreacionBodyTemplate} alignHeader="left" align="left" />
+                        <Column header="ACCIONES" body={actionBodyTemplate} alignHeader="left" align="left" />
+                    </DataTable>
+                </div>
             </div>
 
             {loading ? (
@@ -808,24 +1075,37 @@ export const OportunidadesPage: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Plan Financiero */}
-                        {planLoading ? (
-                            <PlanFinanciero data={{} as PlanFinancieroData} loading />
-                        ) : planData ? (
-                            <PlanFinanciero data={planData} />
-                        ) : (
-                            <div style={{
-                                background: COLORS.gray50,
-                                borderRadius: '12px',
-                                padding: '24px',
-                                textAlign: 'center',
-                            }}>
-                                <i className="pi pi-info-circle" style={{ fontSize: '1.4rem', color: COLORS.gray400, marginBottom: '8px', display: 'block' }} />
-                                <div style={{ fontSize: '0.88rem', color: COLORS.gray500 }}>
-                                    No hay plan financiero asociado a esta oportunidad
-                                </div>
-                            </div>
-                        )}
+                        <TabView>
+                            <TabPanel header="Resumen del Plan" leftIcon="pi pi-file mr-2">
+                                {/* Plan Financiero */}
+                                {planLoading ? (
+                                    <PlanFinanciero data={{} as PlanFinancieroData} loading />
+                                ) : planData ? (
+                                    <PlanFinanciero data={planData} />
+                                ) : (
+                                    <div style={{
+                                        background: COLORS.gray50,
+                                        borderRadius: '12px',
+                                        padding: '24px',
+                                        textAlign: 'center',
+                                    }}>
+                                        <i className="pi pi-info-circle" style={{ fontSize: '1.4rem', color: COLORS.gray400, marginBottom: '8px', display: 'block' }} />
+                                        <div style={{ fontSize: '0.88rem', color: COLORS.gray500 }}>
+                                            No hay plan financiero asociado a esta oportunidad
+                                        </div>
+                                    </div>
+                                )}
+                            </TabPanel>
+                            
+                            <TabPanel header="Seguimientos" leftIcon="pi pi-history mr-2">
+                                {/* Caja de Seguimiento */}
+                                <OportunidadSeguimientoBox 
+                                    oportunidad={detailOp} 
+                                    onSaveSeguimiento={handleSaveSeguimiento}
+                                    loading={saving}
+                                />
+                            </TabPanel>
+                        </TabView>
                     </div>
                 )}
             </Dialog>

@@ -14,87 +14,132 @@ export interface SemaforoInfo {
   text: string;
   tooltip: string;
   hours: number;
-  level: 'green' | 'yellow' | 'orange' | 'red';
+  level: 'green' | 'yellow' | 'orange' | 'red' | 'libre';
   value: number;
+  isLocked: boolean;
+  icon: string;
 }
 
 export const getSemaforoInfo = (prospecto: Prospecto): SemaforoInfo => {
-  const hasSeguimientos = prospecto.seguimientos && prospecto.seguimientos.length > 0;
-  
-  if (hasSeguimientos) {
-    return {
-      color: COLORS.green,
-      bg: `${COLORS.green}15`,
-      text: 'Gestionado',
-      tooltip: 'Este prospecto ya cuenta con seguimiento registrado.',
-      hours: 0,
-      level: 'green',
-      value: 0
-    };
-  }
-
   const now = new Date();
-  const createdTime = prospecto.created_at ? new Date(prospecto.created_at) : now;
   
-  if (isNaN(createdTime.getTime())) {
+  // Obtener fecha del último seguimiento o creación
+  let hasFollowUps = false;
+  let refTime = prospecto.created_at ? new Date(prospecto.created_at) : now;
+  if (prospecto.seguimientos && prospecto.seguimientos.length > 0) {
+    const sorted = [...prospecto.seguimientos].sort((a, b) => 
+      new Date(b.fecha_registro).getTime() - new Date(a.fecha_registro).getTime()
+    );
+    const lastDate = new Date(sorted[0].fecha_registro);
+    if (!isNaN(lastDate.getTime())) {
+      refTime = lastDate;
+      hasFollowUps = true;
+    }
+  }
+
+  // Si la fecha de referencia no es válida
+  if (isNaN(refTime.getTime())) {
+    refTime = now;
+  }
+
+  // Diferencia de tiempo absoluta (independiente de la zona horaria)
+  const diffMs = Math.max(0, now.getTime() - refTime.getTime());
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const totalHours = Math.floor(totalMinutes / 60);
+  
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  const minutes = totalMinutes % 60;
+  const seconds = totalSeconds % 60;
+
+  // Formateador en zona horaria de Ecuador (America/Guayaquil, UTC-5)
+  const formatEcuadorDate = (date: Date) => {
+    try {
+      return date.toLocaleString('es-EC', {
+        timeZone: 'America/Guayaquil',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) + ' (Ecuador)';
+    } catch {
+      return date.toString();
+    }
+  };
+
+  const formattedRef = formatEcuadorDate(refTime);
+  const timeDiffString = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  const tooltipText = `Última actividad: ${formattedRef}\nSin seguimiento por: ${timeDiffString}.`;
+
+  // Comprobar asignación y estado bloqueado (candado cerrado <= 5 días)
+  const hasAgent = !!(prospecto.user_create_id || prospecto.user_create || (prospecto.agente && prospecto.agente !== '—'));
+  const isLocked = hasAgent && totalHours <= 120;
+  const icon = isLocked ? 'pi pi-lock' : 'pi pi-lock-open';
+
+  // Texto del Tag en la columna de SEGUIMIENTO
+  const text = hasFollowUps ? 'En seguimiento' : 'Sin gestión';
+
+  // Estado y color según rango de horas:
+  // - Verde <= 24h
+  // - Amarillo 24h - 48h
+  // - Naranja 48h - 72h
+  // - Rojo > 72h (incluyendo inactividad mayor a 5 días)
+  if (totalHours <= 24) {
     return {
       color: COLORS.green,
       bg: `${COLORS.green}15`,
-      text: 'Al día',
-      tooltip: 'Fecha de creación no válida o no registrada.',
-      hours: 0,
+      text,
+      tooltip: tooltipText,
+      hours: totalHours,
       level: 'green',
-      value: 0
+      value: 0,
+      isLocked,
+      icon
     };
   }
 
-  const diffMs = now.getTime() - createdTime.getTime();
-  const diffHours = Math.max(0, diffMs / (1000 * 60 * 60));
-
-  if (diffHours >= 72) {
-    return {
-      color: COLORS.red,
-      bg: `${COLORS.red}15`,
-      text: 'Crítico (72h+)',
-      tooltip: `Sin seguimiento por ${Math.floor(diffHours)} horas desde su creación.`,
-      hours: diffHours,
-      level: 'red',
-      value: 3
-    };
-  }
-
-  if (diffHours >= 48) {
-    return {
-      color: COLORS.orange,
-      bg: `${COLORS.orange}15`,
-      text: 'Urgente (48h+)',
-      tooltip: `Sin seguimiento por ${Math.floor(diffHours)} horas desde su creación.`,
-      hours: diffHours,
-      level: 'orange',
-      value: 2
-    };
-  }
-
-  if (diffHours >= 24) {
+  if (totalHours <= 48) {
     return {
       color: COLORS.yellow,
       bg: `${COLORS.yellow}15`,
-      text: 'Por contactar (24h+)',
-      tooltip: `Sin seguimiento por ${Math.floor(diffHours)} horas desde su creación.`,
-      hours: diffHours,
+      text,
+      tooltip: tooltipText,
+      hours: totalHours,
       level: 'yellow',
-      value: 1
+      value: 1,
+      isLocked,
+      icon
     };
   }
 
+  if (totalHours <= 72) {
+    return {
+      color: COLORS.orange,
+      bg: `${COLORS.orange}15`,
+      text,
+      tooltip: tooltipText,
+      hours: totalHours,
+      level: 'orange',
+      value: 2,
+      isLocked,
+      icon
+    };
+  }
+
+  // Más de 72h -> Rojo
   return {
-    color: COLORS.green,
-    bg: `${COLORS.green}15`,
-    text: 'Al día (<24h)',
-    tooltip: `Creado recientemente (hace ${Math.floor(diffHours)} horas) sin seguimiento.`,
-    hours: diffHours,
-    level: 'green',
-    value: 0
+    color: COLORS.red,
+    bg: `${COLORS.red}15`,
+    text,
+    tooltip: tooltipText,
+    hours: totalHours,
+    level: totalHours > 120 || !hasAgent ? 'libre' : 'red',
+    value: 3,
+    isLocked,
+    icon
   };
 };
 

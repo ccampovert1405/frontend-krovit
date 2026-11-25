@@ -8,7 +8,7 @@ import { Button } from 'primereact/button';
 import { InputSwitch } from 'primereact/inputswitch';
 import { FormField, IconBox } from '@/components/ui';
 import { COLORS } from '@/utils/constants';
-import { GrupoVentasAPI, UsuarioAPI } from '@/services/api';
+import { GrupoVentasAPI, UsuarioAPI, AgenciaAPI } from '@/services/api';
 
 // ═══════════════════════════════════════════════════════════
 // MODAL PARA CREAR/EDITAR GRUPOS DE VENTAS
@@ -20,7 +20,7 @@ export interface GrupoVentasForm {
     jefeComercialId: string;
     agenteIds: string[];
     leads: boolean;
-    agencia?: string;
+    agenciaId: number | null;
 }
 
 interface Props {
@@ -29,6 +29,7 @@ interface Props {
     onSave: (form: GrupoVentasForm) => Promise<void>;
     grupo?: GrupoVentasAPI | null;
     usuarios: UsuarioAPI[];
+    agencias: AgenciaAPI[];
     loading?: boolean;
 }
 
@@ -38,6 +39,7 @@ export const GrupoVentasModal: React.FC<Props> = ({
     onSave,
     grupo,
     usuarios,
+    agencias,
     loading = false
 }) => {
     const [form, setForm] = useState<GrupoVentasForm>({
@@ -46,7 +48,7 @@ export const GrupoVentasModal: React.FC<Props> = ({
         jefeComercialId: '',
         agenteIds: [],
         leads: false,
-        agencia: ''
+        agenciaId: null
     });
 
     useEffect(() => {
@@ -57,7 +59,7 @@ export const GrupoVentasModal: React.FC<Props> = ({
                 jefeComercialId: grupo.jefeComercialId || '',
                 agenteIds: grupo.agentes?.map(a => a.userID) || [],
                 leads: grupo.leads || false,
-                agencia: grupo.agencia || ''
+                agenciaId: grupo.agenciaId || null
             });
         } else {
             setForm({
@@ -66,7 +68,7 @@ export const GrupoVentasModal: React.FC<Props> = ({
                 jefeComercialId: '',
                 agenteIds: [],
                 leads: false,
-                agencia: ''
+                agenciaId: null
             });
         }
     }, [grupo, visible]);
@@ -88,10 +90,15 @@ export const GrupoVentasModal: React.FC<Props> = ({
         value: u.userID
     }));
 
+    const agenciaOptions = agencias.map(a => ({
+        label: a.nombre,
+        value: a.id
+    }));
+
 
 
     const handleClose = () => {
-        setForm({ nombre: '', descripcion: '', jefeComercialId: '', agenteIds: [], leads: false, agencia: '' });
+        setForm({ nombre: '', descripcion: '', jefeComercialId: '', agenteIds: [], leads: false, agenciaId: null });
         onHide();
     };
 
@@ -170,14 +177,13 @@ export const GrupoVentasModal: React.FC<Props> = ({
 
                 <FormField label="Agencia">
                     <Dropdown
-                        value={form.agencia}
-                        options={[
-                            { label: 'Agencia Centro', value: 'Agencia Centro' },
-                            { label: 'Agencia Garzota', value: 'Agencia Garzota' }
-                        ]}
-                        onChange={(e) => handleChange('agencia', e.value)}
+                        value={form.agenciaId}
+                        options={agenciaOptions}
+                        onChange={(e) => handleChange('agenciaId', e.value)}
                         placeholder="Selecciona una agencia"
+                        filter
                         showClear
+                        emptyMessage="No se encontraron agencias"
                     />
                 </FormField>
 

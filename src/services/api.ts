@@ -595,16 +595,17 @@ export interface GrupoVentasAPI {
     jefeComercial?: UsuarioAPI;
     agentes?: UsuarioAPI[];
     leads?: boolean;
-    agencia?: string;
+    agencia?: AgenciaAPI | null;
+    agenciaId?: number | null;
     createdAt?: string;
     updatedAt?: string;
 }
 
 export const apiGetGruposVentas = () => apiFetch<GrupoVentasAPI[]>('/grupos');
 export const apiGetGrupoVentasById = (id: string | number) => apiFetch<GrupoVentasAPI>(`/grupos/${id}`);
-export const apiCreateGrupoVentas = (data: { nombre: string; descripcion?: string; jefeComercialId?: string; leads?: boolean; agencia?: string }) =>
+export const apiCreateGrupoVentas = (data: { nombre: string; descripcion?: string; jefeComercialId?: string; leads?: boolean; agenciaId?: number }) =>
     apiFetch<GrupoVentasAPI>('/grupos', { method: 'POST', body: JSON.stringify(data) });
-export const apiUpdateGrupoVentas = (id: string | number, data: { nombre: string; descripcion?: string; jefeComercialId?: string; leads?: boolean; agencia?: string }) =>
+export const apiUpdateGrupoVentas = (id: string | number, data: { nombre: string; descripcion?: string; jefeComercialId?: string; leads?: boolean; agenciaId?: number | null }) =>
     apiFetch<GrupoVentasAPI>(`/grupos/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const apiDeleteGrupoVentas = (id: string | number) => apiFetch<void>(`/grupos/${id}`, { method: 'DELETE' });
 
@@ -641,7 +642,7 @@ export interface SemaforoAPI {
     cantidadSeguimientos: number;
     ultimaFecha: string;
     horasTranscurridas: number;
-    semaforo: 'VERDE' | 'ROJO';
+    semaforo: 'VERDE' | 'AMARILLO' | 'NARANJA' | 'ROJO' | 'LIBRE';
 }
 
 export const apiCreateSeguimiento = (data: Partial<SeguimientoAPI>) =>
@@ -670,8 +671,6 @@ export const apiGetSemaforo = () =>
 
 export const apiReasignarOportunidad = (oportunidadId: string | number, nuevoAgenteId: string) =>
     apiFetch<any>(`/seguimientos/reasignar/${oportunidadId}`, { method: 'PUT', body: JSON.stringify({ nuevoAgenteId }) });
-
-
 
 // ─── Exportación a Excel ───────────────────────────────────
 export const apiDownloadFile = async (path: string, defaultFilename: string) => {
@@ -708,5 +707,34 @@ export const apiDownloadFile = async (path: string, defaultFilename: string) => 
 export const apiExportProspectosExcel = () => apiDownloadFile('/prospects/export/excel', 'prospectos.xlsx');
 export const apiExportOportunidadesExcel = () => apiDownloadFile('/oportunidades/export/excel', 'oportunidades.xlsx');
 export const apiExportAllExcel = () => apiDownloadFile('/prospects/export/all-excel', 'prospectos_y_oportunidades.xlsx');
+
+// ════════════════════════════════════════════════════════════
+// AGENCIAS  →  /agencias
+// ════════════════════════════════════════════════════════════
+export interface AgenciaAPI {
+    id: number;
+    nombre: string;
+    direccion?: string;
+    telefono?: string;
+    encargado?: UsuarioAPI;
+    encargadoId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export const apiGetAgencias = () =>
+    apiFetch<AgenciaAPI[]>('/agencias');
+
+export const apiGetAgenciaById = (id: string | number) =>
+    apiFetch<AgenciaAPI>(`/agencias/${id}`);
+
+export const apiCreateAgencia = (data: Partial<AgenciaAPI>) =>
+    apiFetch<AgenciaAPI>('/agencias', { method: 'POST', body: JSON.stringify(data) });
+
+export const apiUpdateAgencia = (id: string | number, data: Partial<AgenciaAPI>) =>
+    apiFetch<AgenciaAPI>(`/agencias/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+
+export const apiDeleteAgencia = (id: string | number) =>
+    apiFetch<void>(`/agencias/${id}`, { method: 'DELETE' });
 
 export default apiFetch;
