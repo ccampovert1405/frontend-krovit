@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { COLORS } from '@/utils/constants';
 import { Prospecto } from '@/types';
+import { ProspectoSemaforo } from './ProspectoSemaforo';
 
 // ═══════════════════════════════════════════════════════════
 // PROSPECTO CARD
@@ -59,8 +60,9 @@ export const ProspectoCard: React.FC<ProspectoCardProps> = ({ prospecto, onEdit,
                     </div>
                     {/* Nombre + empresa */}
                     <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: COLORS.gray800, lineHeight: '1.2' }}>
-                            {prospecto.nombre}
+                        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: COLORS.gray800, lineHeight: '1.2', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>{prospecto.nombre}</span>
+                            <ProspectoSemaforo prospecto={prospecto} showText={false} />
                         </div>
                         {prospecto.empresa && (
                             <div style={{ fontSize: '0.73rem', color: COLORS.gray500, display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>

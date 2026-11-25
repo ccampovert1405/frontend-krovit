@@ -28,7 +28,7 @@ export interface Prospecto {
   celular?: string;
   direccion?: string;
   ciudad?: string;
-  cargo?: string;
+  cedula?: string;
   producto?: TipoProducto;
   grupo?: string;
   plan?: number;
@@ -48,12 +48,41 @@ export interface Prospecto {
     nombres: string;
     apellidos: string;
   };
+  seguimientos?: Seguimiento[];
 }
 
 // ─── Oportunidades ───
 export type EtapaOportunidad = 'Calificación' | 'Propuesta' | 'Negociación' | 'Cierre' | 'Ganada' | 'Perdida' | 'Caída';
 
 export type TipoProductoOportunidad = 'Vehículo' | 'Vivienda' | 'Remodelación';
+
+export enum EstadoSeguimiento {
+  NO_CONTESTA = 'NO CONTESTA',
+  VOLVER_A_LLAMAR = 'VOLVER A LLAMAR',
+  NO_INTERESA = 'NO INTERESA',
+  NUMERO_EQUIVOCADO = 'NÚMERO EQUIVOCADO',
+}
+
+export enum EstadoOportunidadSeguimiento {
+  EN_SEGUIMIENTO = 'En seguimiento',
+  CERRADA = 'Cerrada',
+}
+
+export interface Seguimiento {
+  id: string | number;
+  oportunidad_id?: string | number;
+  prospect_id?: string | number;
+  gestion_realizada?: string;
+  estado: EstadoOportunidadSeguimiento;
+  tipo_seguimiento: EstadoSeguimiento;
+  fecha?: string;
+  hora?: string;
+  minuto?: string;
+  calificacion_oportunidad?: string;
+  fecha_registro: string;
+  usuario_id: string;
+  numero_seguimiento: number;
+}
 
 export interface Oportunidad {
   id: string | number;
@@ -84,6 +113,7 @@ export interface Oportunidad {
   fk_plan?: number | null;
   fk_financiamiento?: number | null;
   planData?: PlanFinancieroData;
+  seguimientos?: Seguimiento[];
 }
 
 // ─── Tareas ───
@@ -156,7 +186,7 @@ export interface NuevoProspectoForm {
   nombre: string;
   apellido: string;
   empresa: string;
-  cargo: string;
+  cedula: string;
   email: string;
   telefono: string;
   celular: string;
@@ -190,6 +220,8 @@ export interface GrupoVentas {
     apellidos: string;
     rol?: string;
   }[];
+  leads?: boolean;
+  agencia?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -211,7 +243,10 @@ export type PageKey =
   | 'roles'
   | 'permisos'
   | 'leads'
-  | 'grupos-ventas';
+  | 'grupos-ventas'
+  | 'listas-precio'
+  | 'plazos'
+  | 'financiamientos';
 
 export interface MenuItem {
   key: PageKey;

@@ -344,7 +344,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
                         icon="pi pi-save"
                         iconPos="left"
                         onClick={handleSave}
-                        style={{ backgroundColor: COLORS.red, borderColor: COLORS.red, borderRadius: '10px', fontWeight: 600, padding: '12px 28px', fontSize: '0.95rem' }}
+                        style={{ backgroundColor: COLORS.red, borderColor: COLORS.red, color: COLORS.white, borderRadius: '10px', fontWeight: 600, padding: '12px 28px', fontSize: '0.95rem' }}
                         pt={{ icon: { style: { fontSize: '1rem' } } }}
                     />
                 </div>
@@ -357,7 +357,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
         >
             {/* ── Información General ── */}
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Nombre de la Oportunidad" required>
                         <InputText
                             value={form.nombre}
@@ -366,7 +366,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Cliente" required>
                         <Dropdown
                             value={form.clienteId}
@@ -384,7 +384,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
             {/* ── Producto y Plan ── */}
             <ModalSectionHeader icon="pi-tag" title="Producto y Plan" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Producto" required>
                         <Dropdown
                             value={form.producto}
@@ -394,7 +394,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Sub-Producto" required>
                         <Dropdown
                             value={selPlazoId}
@@ -405,7 +405,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Plan" required>
                         <Dropdown
                             value={selDetalleId}
@@ -417,7 +417,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Compromiso de Oferta">
                         <Dropdown
                             value={selFinanciamientoId}
@@ -441,7 +441,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
             {/* ── Estado ── */}
             <ModalSectionHeader icon="pi-chart-line" title="Estado" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Etapa">
                         <Dropdown
                             value={form.etapa}
@@ -450,7 +450,7 @@ export const EditarOportunidadModal: React.FC<Props> = ({ oportunidad, visible, 
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Fuente">
                         <Dropdown
                             value={form.fuente}

@@ -5,6 +5,7 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { MultiSelect } from 'primereact/multiselect';
 import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
+import { InputSwitch } from 'primereact/inputswitch';
 import { FormField, IconBox } from '@/components/ui';
 import { COLORS } from '@/utils/constants';
 import { GrupoVentasAPI, UsuarioAPI } from '@/services/api';
@@ -18,6 +19,8 @@ export interface GrupoVentasForm {
     descripcion: string;
     jefeComercialId: string;
     agenteIds: string[];
+    leads: boolean;
+    agencia?: string;
 }
 
 interface Props {
@@ -41,7 +44,9 @@ export const GrupoVentasModal: React.FC<Props> = ({
         nombre: '',
         descripcion: '',
         jefeComercialId: '',
-        agenteIds: []
+        agenteIds: [],
+        leads: false,
+        agencia: ''
     });
 
     useEffect(() => {
@@ -50,14 +55,18 @@ export const GrupoVentasModal: React.FC<Props> = ({
                 nombre: grupo.nombre || '',
                 descripcion: grupo.descripcion || '',
                 jefeComercialId: grupo.jefeComercialId || '',
-                agenteIds: grupo.agentes?.map(a => a.userID) || []
+                agenteIds: grupo.agentes?.map(a => a.userID) || [],
+                leads: grupo.leads || false,
+                agencia: grupo.agencia || ''
             });
         } else {
             setForm({
                 nombre: '',
                 descripcion: '',
                 jefeComercialId: '',
-                agenteIds: []
+                agenteIds: [],
+                leads: false,
+                agencia: ''
             });
         }
     }, [grupo, visible]);
@@ -82,7 +91,7 @@ export const GrupoVentasModal: React.FC<Props> = ({
 
 
     const handleClose = () => {
-        setForm({ nombre: '', descripcion: '', jefeComercialId: '', agenteIds: [] });
+        setForm({ nombre: '', descripcion: '', jefeComercialId: '', agenteIds: [], leads: false, agencia: '' });
         onHide();
     };
 
@@ -159,6 +168,19 @@ export const GrupoVentasModal: React.FC<Props> = ({
                     />
                 </FormField>
 
+                <FormField label="Agencia">
+                    <Dropdown
+                        value={form.agencia}
+                        options={[
+                            { label: 'Agencia Centro', value: 'Agencia Centro' },
+                            { label: 'Agencia Garzota', value: 'Agencia Garzota' }
+                        ]}
+                        onChange={(e) => handleChange('agencia', e.value)}
+                        placeholder="Selecciona una agencia"
+                        showClear
+                    />
+                </FormField>
+
                 <FormField label="Descripción">
                     <InputTextarea
                         value={form.descripcion}
@@ -186,6 +208,17 @@ export const GrupoVentasModal: React.FC<Props> = ({
                             Los usuarios seleccionados podrán ser asignados a este grupo comercial.
                         </small>
                     </FormField>
+                </div>
+
+                <div className="flex align-items-center gap-3 p-3 surface-50 border-round-xl mt-2">
+                    <div className="flex-1">
+                        <div className="font-semibold text-800" style={{ fontSize: '0.92rem' }}>Grupo de Leads</div>
+                        <div className="text-500" style={{ fontSize: '0.78rem' }}>Marcar si este grupo gestionará prospectos de tipo lead</div>
+                    </div>
+                    <InputSwitch 
+                        checked={form.leads} 
+                        onChange={(e) => handleChange('leads', e.value)} 
+                    />
                 </div>
             </form>
         </Dialog>

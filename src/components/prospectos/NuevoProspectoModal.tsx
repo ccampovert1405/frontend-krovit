@@ -16,7 +16,7 @@ export interface NuevoProspectoForm {
     nombre: string;
     apellido: string;
     empresa: string;
-    cargo: string;
+    cedula: string;
     email: string;
     telefono: string;
     celular: string;
@@ -44,7 +44,7 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
         nombre: '',
         apellido: '',
         empresa: '',
-        cargo: '',
+        cedula: '',
         email: '',
         telefono: '',
         celular: '',
@@ -143,6 +143,7 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
                         style={{
                             backgroundColor: COLORS.red,
                             borderColor: COLORS.red,
+                            color: COLORS.white,
                             borderRadius: '10px',
                             fontWeight: 600,
                             padding: '12px 28px',
@@ -161,24 +162,24 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
             {/* ── Información Personal ── */}
             <ModalSectionHeader icon="pi-user" title="Información Personal" />
             <div className="grid" style={{ rowGap: '4px' }}>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Nombre" required>
                         <InputText value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Nombre" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Apellido">
                         <InputText value={form.apellido} onChange={(e) => set('apellido', e.target.value)} placeholder="Apellido" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Empresa">
                         <InputText value={form.empresa} onChange={(e) => set('empresa', e.target.value)} placeholder="Empresa" />
                     </FormField>
                 </div>
-                <div className="col-6">
-                    <FormField label="Cargo">
-                        <InputText value={form.cargo} onChange={(e) => set('cargo', e.target.value)} placeholder="Cargo" />
+                <div className="col-12 md:col-6">
+                    <FormField label="Cédula" required>
+                        <InputText value={form.cedula} onChange={(e) => set('cedula', e.target.value)} placeholder="Número de identificación" />
                     </FormField>
                 </div>
             </div>
@@ -186,22 +187,22 @@ export const NuevoProspectoModal: React.FC<Props> = ({ visible, onHide, onSave }
             {/* ── Datos de Contacto ── */}
             <ModalSectionHeader icon="pi-phone" title="Datos de Contacto" />
             <div className="grid" style={{ rowGap: '4px' }}>
-                <div className="col-6">
-                    <FormField label="Email" required>
+                <div className="col-12 md:col-6">
+                    <FormField label="Email">
                         <InputText value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="correo@ejemplo.com" type="email" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Teléfono" required>
                         <InputText value={form.telefono} onChange={(e) => set('telefono', e.target.value)} placeholder="+593 99 999 9999" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Celular">
                         <InputText value={form.celular} onChange={(e) => set('celular', e.target.value)} placeholder="+593 99 999 9999" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Ciudad">
                         <InputText value={form.ciudad} onChange={(e) => set('ciudad', e.target.value)} placeholder="Ciudad" />
                     </FormField>

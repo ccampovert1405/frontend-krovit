@@ -95,7 +95,7 @@ export const UsuarioModal: React.FC<UsuarioModalProps> = ({
                 icon={loading ? 'pi pi-spin pi-spinner' : 'pi pi-check'}
                 onClick={handleSave}
                 disabled={loading || !form.nombres || !form.apellidos || !form.correo || !form.rolId || (!isEdit && !form.password)}
-                style={{ backgroundColor: COLORS.red, borderColor: COLORS.red }}
+                style={{ backgroundColor: COLORS.red, borderColor: COLORS.red, color: COLORS.white }}
             />
         </div>
     );
@@ -122,7 +122,7 @@ export const UsuarioModal: React.FC<UsuarioModalProps> = ({
                         style={{ color: COLORS.gray400, letterSpacing: '1px' }}>
                         Información personal
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-column sm:flex-row gap-3">
                         <div className="flex-1">
                             <label className="block text-sm font-semibold mb-1" style={{ color: COLORS.gray600 }}>
                                 Nombres <span style={{ color: COLORS.red }}>*</span>
@@ -188,7 +188,7 @@ export const UsuarioModal: React.FC<UsuarioModalProps> = ({
                         style={{ color: COLORS.gray400, letterSpacing: '1px' }}>
                         Rol y estado
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-column sm:flex-row gap-3">
                         <div className="flex-1">
                             <label className="block text-sm font-semibold mb-1" style={{ color: COLORS.gray600 }}>
                                 Rol <span style={{ color: COLORS.red }}>*</span>

@@ -331,7 +331,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
                         iconPos="left"
                         onClick={handleSubmit}
                         disabled={saving}
-                        style={{ backgroundColor: COLORS.red, borderColor: COLORS.red, borderRadius: '10px', fontWeight: 600, padding: '12px 28px', fontSize: '0.95rem' }}
+                        style={{ backgroundColor: COLORS.red, borderColor: COLORS.red, color: COLORS.white, borderRadius: '10px', fontWeight: 600, padding: '12px 28px', fontSize: '0.95rem' }}
                         pt={{ icon: { style: { fontSize: '1rem' } } }}
                     />
                 </div>
@@ -345,7 +345,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
             {/* ── Información General ── */}
             <ModalSectionHeader icon="pi-sync" title="Información General" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Nombre de la Oportunidad" required>
                         <InputText
                             value={form.nombre}
@@ -354,7 +354,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Cliente" required>
                         <Dropdown
                             value={form.clienteId}
@@ -372,7 +372,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
             {/* ── Producto y Plan ── */}
             <ModalSectionHeader icon="pi-tag" title="Producto y Plan" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Producto" required>
                         <Dropdown
                             value={form.producto}
@@ -384,7 +384,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Sub-Producto" required>
                         <Dropdown
                             value={selPlazoId}
@@ -395,7 +395,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Plan (Monto)" required>
                         <Dropdown
                             value={selDetalleId}
@@ -407,7 +407,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Compromiso de Oferta">
                         <Dropdown
                             value={selFinanciamientoId}
@@ -433,7 +433,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
             {/* ── Clasificación ── */}
             <ModalSectionHeader icon="pi-chart-line" title="Clasificación" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Fuente">
                         <Dropdown
                             value={form.fuente}
@@ -443,7 +443,7 @@ export const NuevaOportunidadModal: React.FC<Props> = ({ visible, onHide, onSave
                         />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Etapa">
                         <Dropdown
                             value={form.etapa}

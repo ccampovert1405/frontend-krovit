@@ -23,6 +23,7 @@ import { PlanFinanciero } from './PlanFinanciero';
 import { apiGetPlanFinanciero } from '@/services/api';
 import { TareasOportunidadModal } from './TareasOportunidadModal';
 import { useNotification } from '@/context/NotificationContext';
+import { apiExportOportunidadesExcel } from '@/services/api';
 import { notifyApiError } from '@/utils/errorHelpers';
 
 // ════════════════════════════════════════════════════════════
@@ -49,7 +50,7 @@ const ETAPA_DOT: Record<EtapaKanban, string> = {
 // OPORTUNIDADES PAGE
 // ════════════════════════════════════════════════════════════
 export const OportunidadesPage: React.FC = () => {
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
     const {
         selectedMes,
         setSelectedMes,
@@ -91,6 +92,19 @@ export const OportunidadesPage: React.FC = () => {
     const [editingOp, setEditingOp] = useState<Oportunidad | null>(null);
     const [saving, setSaving] = useState(false);
     const { showSuccess, showError, showWarn } = useNotification();
+    const [exportingExcel, setExportingExcel] = useState(false);
+
+    const handleExportExcel = async () => {
+        try {
+            setExportingExcel(true);
+            await apiExportOportunidadesExcel();
+            showSuccess('Archivo de oportunidades descargado correctamente.', 'Exportación exitosa');
+        } catch (err: any) {
+            notifyApiError(err, { showError, showWarn }, 'Error al exportar a Excel');
+        } finally {
+            setExportingExcel(false);
+        }
+    };
 
     // ─── Filtros y Búsqueda ─────────────────────────────────
     const [selectedEtapa, setSelectedEtapa] = useState<EtapaOportunidad | 'Todas'>('Todas');
@@ -453,6 +467,16 @@ export const OportunidadesPage: React.FC = () => {
                         />
                     </div>
                 </div>
+                {/* Botón Exportar Excel */}
+            {(user?.rol === 'Admin' || user?.rol === 'Administrador' || hasPermission('oportunidad.export')) && (
+                <Button
+                    label="Exportar Excel"
+                    icon="pi pi-file-excel"
+                    className="p-button-success p-button-outlined ml-2"
+                    onClick={handleExportExcel}
+                    loading={exportingExcel}
+                />
+            )}
             </PageHeader>
 
             {/* KPIs ROW */}

@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from './useAuth';
 export { useAuth };
-import { Prospecto, Oportunidad, EtapaAIDA, PlanFinancieroData, Tarea, Meta } from '@/types';
+import { Prospecto, Oportunidad, EtapaAIDA, PlanFinancieroData, Tarea, Meta, EstadoSeguimiento } from '@/types';
 import {
   apiGetProspectos, apiCreateProspecto, apiUpdateProspecto, apiDeleteProspecto,
   apiGetOportunidades, apiCreateOportunidad, apiUpdateOportunidad, apiDeleteOportunidad,
@@ -33,8 +33,6 @@ const ETAPA_TO_API: Record<string, string> = {
 };
 const toApiEtapa = (etapa?: string): string | undefined =>
   etapa ? (ETAPA_TO_API[etapa] ?? etapa.toUpperCase()) : undefined;
-
-
 // ─── Helpers de normalización ────────────────────────────────
 const toProspecto = (p: ProspectoAPI, fallbackMes?: number): Prospecto => ({
   id: p.id,
@@ -57,6 +55,21 @@ const toProspecto = (p: ProspectoAPI, fallbackMes?: number): Prospecto => ({
   user_create: p.user_create,
   created_at: p.createdAt || p.created_at || '',
   updated_at: p.updatedAt || p.updated_at || '',
+  seguimientos: p.seguimientos ? p.seguimientos.map(s => ({
+    id: s.id,
+    oportunidad_id: s.oportunidad_id,
+    prospect_id: s.prospect_id,
+    gestion_realizada: s.gestion_realizada,
+    estado: s.estado as any,
+    tipo_seguimiento: s.tipo_seguimiento as any,
+    fecha: s.fecha,
+    hora: s.hora,
+    minuto: s.minuto,
+    calificacion_oportunidad: s.calificacion_oportunidad,
+    fecha_registro: s.fecha_registro,
+    usuario_id: s.usuario_id,
+    numero_seguimiento: s.numero_seguimiento,
+  })) : [],
 });
 
 const toOportunidad = (o: OportunidadAPI, fallbackMes?: number): Oportunidad => {
@@ -214,14 +227,20 @@ export const useKPIs = ({ prospectos, oportunidades }: UseKPIsParams) => {
 export const useAIDAFunnel = (prospectos: Prospecto[]) => {
   return useMemo(() => {
     const etapas: EtapaAIDA[] = ['ATENCION', 'INTERES', 'DESEO', 'ACCION'];
-    return etapas.map(etapa => ({ etapa, count: prospectos.filter(p => p.etapa === etapa).length }));
+    return etapas.map(etapa => ({
+      etapa,
+      count: prospectos.filter(p => 
+        p.etapa === etapa && 
+        !p.seguimientos?.some(s => s.tipo_seguimiento === EstadoSeguimiento.NUMERO_EQUIVOCADO)
+      ).length
+    }));
   }, [prospectos]);
 };
 
 // ═══════════════════════════════════════════════════════════
 // HOOK: useDashboardIndices — conectado a KPI dinámicos
 // ═══════════════════════════════════════════════════════════
-export const useDashboardIndices = (params: { mes: number; anio: string; userId?: string | number }) => {
+export const useDashboardIndices = (params: { mes: number; anio: string; userId?: string | number; grupoId?: string | number }) => {
   const { user } = useAuth();
   const [indices, setIndices] = useState<DashboardIndices | null>(null);
   const [loading, setLoading] = useState(false);
@@ -232,9 +251,9 @@ export const useDashboardIndices = (params: { mes: number; anio: string; userId?
     setLoading(true);
     setError(null);
 
-    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente';
+    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente' || user?.rol === 'Gerente Comercial';
     const mesNombre = MESES_NOMBRES[params.mes];
-    const apiParams = { mes: mesNombre, anio: params.anio, userId: params.userId || user?.id || '' };
+    const apiParams = { mes: mesNombre, anio: params.anio, userId: params.userId || user?.id || '', grupoId: params.grupoId };
 
     const fetchAction = (isPrivileged && !params.userId)
       ? apiGetDashboardIndex(apiParams)
@@ -246,7 +265,7 @@ export const useDashboardIndices = (params: { mes: number; anio: string; userId?
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [params.mes, params.anio, params.userId, user]);
+  }, [params.mes, params.anio, params.userId, params.grupoId, user]);
 
   return { indices, loading, error };
 };
@@ -268,7 +287,7 @@ export const useProspectos = (params?: { mes: number; anio: string; userId?: str
     setError(null);
 
     // Visibilidad: Solo Admin y Jefe Comercial ven todo. Otros ven solo lo suyo.
-    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente';
+    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente' || user?.rol === 'Gerente Comercial';
 
     // Si se pasa userId explícito (desde un filtro), se usa ese. 
     // Si no, si no es privilegiado, se usa su propio ID.
@@ -287,7 +306,7 @@ export const useProspectos = (params?: { mes: number; anio: string; userId?: str
 
   const refresh = useCallback(() => {
     setLoading(true);
-    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente';
+    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente' || user?.rol === 'Gerente Comercial';
     const fetchId = params?.userId || (!isPrivileged ? user?.id : undefined);
     const mesNombre = MESES_NOMBRES[params?.mes ?? new Date().getMonth()];
     const anio = params?.anio ?? '2026';
@@ -301,7 +320,7 @@ export const useProspectos = (params?: { mes: number; anio: string; userId?: str
   const addProspecto = useCallback(async (prospecto: Omit<Prospecto, 'id'>) => {
     try {
       // Separar campos de solo lectura o mapeo interno del payload de la API
-      const { etapa: _etapa, user_create, agente, tipo, ...payload } = prospecto;
+      const { etapa: _etapa, user_create, agente, tipo, seguimientos, ...payload } = prospecto;
       const created = await apiCreateProspecto(payload);
       setProspectos(prev => [...prev, toProspecto(created)]);
     } catch (err) {
@@ -313,7 +332,7 @@ export const useProspectos = (params?: { mes: number; anio: string; userId?: str
   const updateProspecto = useCallback(async (id: string | number, changes: Partial<Prospecto>) => {
     try {
       // Separar campos de solo lectura o mapeo interno del payload de la API
-      const { user_create, agente, tipo, ...others } = changes;
+      const { user_create, agente, tipo, seguimientos, ...others } = changes;
 
       const apiPayload = {
         ...others,
@@ -362,7 +381,7 @@ export const useOportunidades = (params?: { mes: number; anio: string; userId?: 
     setError(null);
 
     // Visibilidad: Solo Admin y Jefe Comercial ven todo. Otros ven solo lo suyo.
-    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente';
+    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente' || user?.rol === 'Gerente Comercial';
     const fetchId = params?.userId || (!isPrivileged ? user?.id : undefined);
 
     const mesNombre = MESES_NOMBRES[params?.mes ?? new Date().getMonth()].toLowerCase();
@@ -453,7 +472,7 @@ export const useTareas = (params?: { mes: number; anio: string; userId?: string 
     setError(null);
 
     // Visibilidad: Solo Admin y Jefe Comercial ven todo. Otros ven solo lo suyo.
-    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente';
+    const isPrivileged = user?.rol === 'Admin' || user?.rol === 'Administrador' || user?.rol === 'Jefe Comercial' || user?.rol === 'Gerente' || user?.rol === 'Gerente Comercial';
     const fetchId = params?.userId || (!isPrivileged ? user?.id : undefined);
 
     const mesNombre = MESES_NOMBRES[params?.mes ?? new Date().getMonth()];
@@ -574,7 +593,7 @@ export const useForecast = (params: { userId?: string | number; mes: number; ani
 };
 
 // ─── useDashboardJefeDetails ──────────────────────────────────
-export const useDashboardJefeDetails = (params: { mes: number; anio: string }) => {
+export const useDashboardJefeDetails = (params: { mes: number; anio: string; grupoId?: string | number }) => {
   const [details, setDetails] = useState<DashboardJefeDetailsAPI[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -584,7 +603,7 @@ export const useDashboardJefeDetails = (params: { mes: number; anio: string }) =
     setError(null);
     const mesNombre = MESES_NOMBRES[params.mes];
     try {
-      const data = await apiGetDashboardJefeDetails({ mes: mesNombre, anio: params.anio });
+      const data = await apiGetDashboardJefeDetails({ mes: mesNombre, anio: params.anio, grupoId: params.grupoId });
       setDetails(data || []);
     } catch (err) {
       console.error("Error fetching jefe dashboard details", err);
@@ -592,7 +611,7 @@ export const useDashboardJefeDetails = (params: { mes: number; anio: string }) =
     } finally {
       setLoading(false);
     }
-  }, [params.mes, params.anio]);
+  }, [params.mes, params.anio, params.grupoId]);
 
   useEffect(() => {
     fetchDetails();

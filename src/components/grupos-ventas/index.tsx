@@ -115,7 +115,10 @@ export const GruposVentasPage: React.FC = () => {
                 <i className="pi pi-sitemap text-2xl" />
             </div>
             <div>
-                <div className="font-bold text-900 text-lg">{g.nombre}</div>
+                <div className="flex align-items-center gap-2">
+                    <div className="font-bold text-900 text-lg">{g.nombre}</div>
+                    {g.leads && <Tag value="Leads" severity="success" style={{ fontSize: '0.65rem' }} />}
+                </div>
                 <div className="text-sm text-500 line-height-2">{g.descripcion || 'Sin descripción'}</div>
             </div>
         </div>
@@ -209,7 +212,34 @@ export const GruposVentasPage: React.FC = () => {
                     responsiveLayout="scroll"
                 >
                     <Column header="Grupo / Equipo" body={grupoTemplate} field="nombre" sortable />
+                    <Column 
+                        header="Agencia" 
+                        field="agencia" 
+                        body={(g: GrupoVentasAPI) => g.agencia ? (
+                            <Tag 
+                                value={g.agencia} 
+                                severity="warning" 
+                                style={{ borderRadius: '6px', padding: '4px 12px', fontWeight: 600 }}
+                            />
+                        ) : (
+                            <span className="text-400 italic">No asignada</span>
+                        )} 
+                        sortable 
+                        style={{ width: '180px' }} 
+                    />
                     <Column header="Agentes Asignados" body={agentesTemplate} style={{ width: '250px' }} />
+                    <Column 
+                        header="Gestión de Leads" 
+                        body={(g: GrupoVentasAPI) => (
+                            <Tag 
+                                value={g.leads ? 'SÍ' : 'NO'} 
+                                severity={g.leads ? 'success' : 'secondary'} 
+                                style={{ borderRadius: '6px', padding: '4px 12px' }}
+                            />
+                        )} 
+                        style={{ width: '150px' }} 
+                        align="center" 
+                    />
                     <Column header="Acciones" body={accionesTemplate} style={{ width: '120px' }} align="center" />
                 </DataTable>
             </div>

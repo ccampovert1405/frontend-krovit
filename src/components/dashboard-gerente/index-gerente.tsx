@@ -38,6 +38,7 @@ import { Lead, Period, VendorStats } from './types';
 import { normalizeVendor, getDateRange, parseLeadDate } from './utils';
 import { leadService } from './services';
 import { jsPDF } from 'jspdf';
+import { useTenantConfig } from '@/context/TenantConfigContext';
 import 'primeicons/primeicons.css';
 import './dashboard-gerente.css';
 
@@ -100,6 +101,7 @@ function initials(name: string) {
 }
 
 export default function DashboardGerentePage() {
+  const { activeTenant } = useTenantConfig();
   const [rawVeh, setRawVeh] = useState<Lead[]>([]);
   const [rawViv, setRawViv] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -314,7 +316,7 @@ export default function DashboardGerentePage() {
       <div className="loading-overlay">
         <div className="spinner" />
         <div className="loading-text">Cargando datos en tiempo real</div>
-        <div className="loading-sub">Conectando con las APIs de Planifikt...</div>
+        <div className="loading-sub">Conectando con las APIs de {activeTenant.name}...</div>
       </div>
     );
   }
@@ -324,9 +326,9 @@ export default function DashboardGerentePage() {
       {/* TOPBAR */}
       <header style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--surface)', borderBottom: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: '60px', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, var(--col-veh), var(--col-viv))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 600, fontSize: '14px' }}>PL</div>
+          <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, var(--col-veh), var(--col-viv))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 600, fontSize: '14px' }}>{activeTenant.name.slice(0, 2).toUpperCase()}</div>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text1)' }}>Planifikt</div>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text1)' }}>{activeTenant.name}</div>
             <div style={{ fontSize: '11px', color: 'var(--text2)' }}>Dashboard Gerencial</div>
           </div>
         </div>

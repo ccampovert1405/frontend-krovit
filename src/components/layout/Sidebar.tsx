@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks';
 import { Avatar } from '@/components/ui';
 import { formatUserDisplayName } from '@/utils/formatters';
 import { ChangePasswordModal } from '@/components/auth/ChangePasswordModal';
+import { useTenantConfig } from '@/context/TenantConfigContext';
 
 // ═══════════════════════════════════════════════════════════
 // SIDEBAR - NAVEGACIÓN PRINCIPAL (responsive)
@@ -24,23 +25,53 @@ const KrivotLogo: React.FC<{ size?: number }> = ({ size = 20 }) => (
 interface SidebarProps {
   active: PageKey;
   isOpen?: boolean;
+  isCollapsed?: boolean;
   onClose?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, isCollapsed = false, onClose }) => {
   const { logout, user } = useAuth();
+  const { activeTenant } = useTenantConfig();
   const [showPwdModal, setShowPwdModal] = React.useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
   const location = useLocation();
 
   const displayName = formatUserDisplayName(user?.nombres, user?.apellidos);
 
-  const menuItems = user?.menus || [];
+  const rawMenuItems = (user?.menus || []).filter(item => !item.ruta.toLowerCase().includes('tarea'));
+  const hasListasPrecio = rawMenuItems.some(item => item.ruta.toLowerCase().includes('lista-precio') || item.ruta.toLowerCase().includes('listas-precio'));
+  const menuItems = [...rawMenuItems];
+  const isUserAdmin = user?.rol === 'Admin' || user?.rol === 'Administrador' || (typeof user?.rol === 'object' && ((user?.rol as any).nombreRol === 'Admin' || (user?.rol as any).nombreRol === 'Administrador'));
+  if (!hasListasPrecio && isUserAdmin) {
+    menuItems.push({
+      ruta: '/listas-precio',
+      label: 'Listas de Precios',
+      icono: 'attach_money',
+    });
+  }
+  const hasPlazos = rawMenuItems.some(item => item.ruta.toLowerCase().includes('plazo'));
+  if (!hasPlazos && isUserAdmin) {
+    menuItems.push({
+      ruta: '/plazos',
+      label: 'Plazos',
+      icono: 'clock',
+    });
+  }
+  const hasFinanciamientos = rawMenuItems.some(item => item.ruta.toLowerCase().includes('financiamiento'));
+  if (!hasFinanciamientos && isUserAdmin) {
+    menuItems.push({
+      ruta: '/financiamientos',
+      label: 'Financiamientos',
+      icono: 'percentage',
+    });
+  }
 
 
   // Mapeo de iconos
   const getIcon = (iconName: string, pageKey?: string) => {
     if (pageKey === 'leads') return 'pi-user-plus';
+    if (pageKey === 'plazos') return 'pi-clock';
+    if (pageKey === 'financiamientos') return 'pi-percentage';
     const map: Record<string, string> = {
       'dashboard': 'pi-th-large',
       'person': 'pi-users',
@@ -67,6 +98,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, onClos
     if (r.includes('tarea')) return 'tareas';
     if (r.includes('grupo')) return 'grupos-ventas';
     if (r.includes('dashboard-leads')) return 'dashboard-leads';
+    if (r.includes('lista-precio') || r.includes('listas-precio')) return 'listas-precio';
+    if (r.includes('plazo')) return 'plazos';
+    if (r.includes('financiamiento')) return 'financiamientos';
 
     return ruta.replace('/', '') as PageKey;
   };
@@ -89,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, onClos
       <div
         className={`sidebar-overlay${isOpen ? ' is-open' : ''} fixed left-0 top-0 flex flex-column`}
         style={{
-          width: '220px',
+          width: 'var(--sidebar-width)',
           backgroundColor: COLORS.white,
           borderRight: `1px solid ${COLORS.gray200}`,
           zIndex: 1100,
@@ -106,49 +140,65 @@ export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, onClos
         </button>
 
         {/* Header - Branding & Profile */}
-        <div className="p-4 border-bottom-1" style={{ borderColor: COLORS.gray100 }}>
-          <div className="flex align-items-center gap-3 mb-4">
-            <img src="/logo-planifikt.png" alt="Logo" style={{ height: '32px', objectFit: 'contain' }} />
-            <div className="text-xl font-black" style={{ color: COLORS.red, letterSpacing: '-0.5px' }}>PLANIFIKT</div>
+        <div className="p-4 border-bottom-1" style={{ borderColor: COLORS.gray100, display: 'flex', flexDirection: 'column', alignItems: isCollapsed ? 'center' : 'stretch' }}>
+          <div className="flex align-items-center gap-3 mb-4" style={{ width: '100%', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
+            <img 
+              src={isCollapsed ? activeTenant.logos.favicon : activeTenant.logos.main} 
+              alt="Logo" 
+              style={{ height: '32px', maxWidth: '100%', objectFit: 'contain' }} 
+            />
+            {!isCollapsed && activeTenant.showTextNextToLogo && (
+              <div className="text-xl font-black" style={{ color: COLORS.red, letterSpacing: '-0.5px' }}>
+                {activeTenant.name.toUpperCase()}
+              </div>
+            )}
           </div>
 
           {/* User Detail - Clickable for "Tree" menu */}
           <div
             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-            className="flex align-items-center gap-1 p-3 border-round-xl bg-gray-50 border-1 cursor-pointer hover:bg-gray-100 transition-duration-200"
-            style={{ borderColor: COLORS.gray100 }}
+            className="flex align-items-center gap-1 p-2 border-round-xl bg-gray-50 border-1 cursor-pointer hover:bg-gray-100 transition-duration-200"
+            style={{ borderColor: COLORS.gray100, width: '100%', justifyContent: isCollapsed ? 'center' : 'flex-start' }}
           >
             <Avatar
               name={displayName}
               size="normal"
             />
-            <div style={{ lineHeight: '1.2' }}>
-              <div className="font-bold text-900" style={{ fontSize: '0.75rem' }}>{displayName}</div>
-              <div className="text-500" style={{ fontSize: '0.5rem' }}>{user?.rol || 'Vendedor'}</div>
-            </div>
+            {!isCollapsed && (
+              <div style={{ lineHeight: '1.2' }}>
+                <div className="font-bold text-900" style={{ fontSize: '0.75rem' }}>{displayName}</div>
+                <div className="text-500" style={{ fontSize: '0.5rem' }}>{user?.rol || 'Vendedor'}</div>
+              </div>
+            )}
 
-            <div className="ml-auto">
-              <i className={`pi pi-chevron-${isUserMenuOpen ? 'up' : 'down'} text-400`} style={{ fontSize: '0.75rem' }} />
-            </div>
+            {!isCollapsed && (
+              <div className="ml-auto">
+                <i className={`pi pi-chevron-${isUserMenuOpen ? 'up' : 'down'} text-400`} style={{ fontSize: '0.75rem' }} />
+              </div>
+            )}
           </div>
 
           {/* User Menu "Tree" */}
           {isUserMenuOpen && (
-            <div className="mt-2 flex flex-column gap-1 overflow-hidden transition-all transition-duration-300">
+            <div className="mt-2 flex flex-column gap-1 overflow-hidden transition-all transition-duration-300" style={{ width: '100%' }}>
               <button
                 onClick={() => { setShowPwdModal(true); setIsUserMenuOpen(false); }}
                 className="w-full flex align-items-center gap-1 px-3 py-2 border-round-lg border-none cursor-pointer bg-transparent text-600 hover:text-blue-600 hover:bg-blue-50 transition-duration-200"
+                style={{ justifyContent: isCollapsed ? 'center' : 'flex-start' }}
+                title="Cambiar Contraseña"
               >
-                <i className="pi pi-lock" style={{ fontSize: '0.75rem' }} />
-                <span className="text-xs font-semibold">Cambiar Contraseña</span>
+                <i className="pi pi-lock" style={{ fontSize: '0.75rem', marginRight: isCollapsed ? '0' : '8px' }} />
+                {!isCollapsed && <span className="text-xs font-semibold">Cambiar Contraseña</span>}
               </button>
 
               <button
                 onClick={() => { logout(); setIsUserMenuOpen(false); }}
                 className="w-full flex align-items-center gap-1 px-3 py-2 border-round-lg border-none cursor-pointer bg-transparent text-600 hover:text-red-600 hover:bg-red-50 transition-duration-200"
+                style={{ justifyContent: isCollapsed ? 'center' : 'flex-start' }}
+                title="Cerrar Sesión"
               >
-                <i className="pi pi-sign-out" style={{ fontSize: '0.9rem' }} />
-                <span className="text-xs font-semibold">Cerrar Sesión</span>
+                <i className="pi pi-sign-out" style={{ fontSize: '0.9rem', marginRight: isCollapsed ? '0' : '8px' }} />
+                {!isCollapsed && <span className="text-xs font-semibold">Cerrar Sesión</span>}
               </button>
             </div>
           )}
@@ -167,18 +217,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, onClos
                   key={item.ruta}
                   to={`/${pageKey}`}
                   onClick={handleLinkClick}
-                  className="w-full flex align-items-center gap-1 px-3 py-2 mb-1 border-round-lg cursor-pointer no-underline"
+                  className="w-full flex align-items-center mb-1 border-round-lg cursor-pointer no-underline"
                   style={{
                     backgroundColor: isPageActive ? COLORS.redLight : 'transparent',
                     color: isPageActive ? COLORS.red : COLORS.gray600,
                     transition: 'background-color 0.2s ease, color 0.2s ease',
                     border: 'none',
-                    display: 'flex'
+                    display: 'flex',
+                    justifyContent: isCollapsed ? 'center' : 'flex-start',
+                    padding: isCollapsed ? '10px 0' : '10px 12px',
                   }}
+                  title={item.label}
                 >
-                  <i className={`pi ${getIcon(item.icono, pageKey)}`} style={{ fontSize: '1rem' }} />
-                  <span className="font-semibold text-sm">{item.label}</span>
-                  {isPageActive && (
+                  <i 
+                    className={`pi ${getIcon(item.icono, pageKey)}`} 
+                    style={{ 
+                      fontSize: '1.1rem', 
+                      marginRight: isCollapsed ? '0' : '8px',
+                      marginLeft: isCollapsed ? '0' : '2px',
+                    }} 
+                  />
+                  {!isCollapsed && <span className="font-semibold text-sm">{item.label}</span>}
+                  {!isCollapsed && isPageActive && (
                     <i className="pi pi-chevron-right ml-auto" style={{ fontSize: '0.75rem' }} />
                   )}
                 </Link>
@@ -189,31 +249,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ active, isOpen = false, onClos
 
         {/* Footer - Branding */}
         <div className="mt-auto">
-
-          {/* Original Branding Footer */}
-          <div
-            className="p-3 border-top-1 bg-gray-50"
-            style={{
-              borderColor: COLORS.gray200,
-              backgroundColor: '#f9fafb',
-              paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' // Respect iPhone home bar
-            }}
-          >
-            <div className="flex align-items-start gap-2">
-              <KrivotLogo size={18} />
-              <div style={{ lineHeight: '1.4' }}>
-                <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
-                  Plataforma CRM desarrollada por
-                </div>
-                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e293b' }}>
-                  KRIVOT ECUADOR
-                </div>
-                <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
-                  CRM Planifikt v1.0
+          {!isCollapsed ? (
+            <div
+              className="p-3 border-top-1 bg-gray-50"
+              style={{
+                borderColor: COLORS.gray200,
+                backgroundColor: '#f9fafb',
+                paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' // Respect iPhone home bar
+              }}
+            >
+              <div className="flex align-items-start gap-2">
+                <KrivotLogo size={18} />
+                <div style={{ lineHeight: '1.4' }}>
+                  <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                    Plataforma CRM desarrollada por
+                  </div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e293b' }}>
+                    KRIVOT ECUADOR
+                  </div>
+                  <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
+                    CRM Planifikt v1.0
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div 
+              className="p-3 border-top-1 bg-gray-50 flex justify-content-center"
+              style={{
+                borderColor: COLORS.gray200,
+                backgroundColor: '#f9fafb',
+                paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))'
+              }}
+            >
+              <KrivotLogo size={18} />
+            </div>
+          )}
         </div>
       </div>
 

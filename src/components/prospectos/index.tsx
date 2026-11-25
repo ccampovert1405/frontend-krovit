@@ -7,7 +7,7 @@ import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
 import { Tag } from 'primereact/tag';
 import { useProspectos, useFilters, useAuth } from '@/hooks';
-import { apiGetUsersByRole, UsuarioAPI } from '@/services/api';
+import { apiGetUsersByRole, UsuarioAPI, apiExportProspectosExcel } from '@/services/api';
 import { COLORS, ETAPAS_AIDA, ETAPA_COLORS, MESES_NOMBRES } from '@/utils/constants';
 import { formatUserDisplayName } from '@/utils/formatters';
 import { Prospecto, EtapaAIDA } from '@/types';
@@ -23,7 +23,7 @@ import { notifyApiError } from '@/utils/errorHelpers';
 
 
 export const ProspectosPage: React.FC = () => {
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
     const {
         selectedMes,
         setSelectedMes,
@@ -66,6 +66,19 @@ export const ProspectosPage: React.FC = () => {
 
     const [globalFilter, setGlobalFilter] = useState('');
     const { showSuccess, showError, showWarn } = useNotification();
+    const [exportingExcel, setExportingExcel] = useState(false);
+
+    const handleExportExcel = async () => {
+        try {
+            setExportingExcel(true);
+            await apiExportProspectosExcel();
+            showSuccess('Archivo de prospectos descargado correctamente.', 'Exportación exitosa');
+        } catch (err: any) {
+            notifyApiError(err, { showError, showWarn }, 'Error al exportar a Excel');
+        } finally {
+            setExportingExcel(false);
+        }
+    };
 
     // ─── Agrupación y Filtros (Locales) ────────────────────────────────
     const grouped = ETAPAS_AIDA.reduce((acc, etapa) => {
@@ -194,7 +207,7 @@ export const ProspectosPage: React.FC = () => {
                 nombre: formData.nombre,
                 apellido: formData.apellido,
                 empresa: formData.empresa,
-                cargo: formData.cargo,
+                cargo: (formData as any).cargo,
                 email: formData.email,
                 telefono: formData.telefono,
                 celular: formData.celular,
@@ -289,6 +302,16 @@ export const ProspectosPage: React.FC = () => {
                         />
                     </div>
                 </div>
+                {/* Botón Exportar Excel */}
+            {(user?.rol === 'Admin' || user?.rol === 'Administrador' || hasPermission('prospect.export')) && (
+                <Button
+                    label="Exportar Excel"
+                    icon="pi pi-file-excel"
+                    className="p-button-success p-button-outlined ml-2"
+                    onClick={handleExportExcel}
+                    loading={exportingExcel}
+                />
+            )}
             </PageHeader>
 
             <div className="flex flex-wrap gap-4 mb-5">

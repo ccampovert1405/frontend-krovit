@@ -4,21 +4,21 @@
 
 // ─── Colores de Marca ───
 export const COLORS = {
-  // Primarios
-  red: '#E31E24',
-  redDark: '#C41920',
-  redLight: '#FEF2F2',
-  redBorder: '#FECACA',
+  // Primarios (Marca Blanca)
+  red: 'var(--primary-color, #E31E24)',
+  redDark: 'var(--primary-color-dark, #C41920)',
+  redLight: 'var(--primary-color-light, #FEF2F2)',
+  redBorder: 'var(--primary-color-border, #FECACA)',
 
   // Neutros
-  black: '#1A1A1A',
+  black: 'var(--text-main, #1A1A1A)',
   white: '#FFFFFF',
-  gray50: '#F9FAFB',
-  gray100: '#F3F4F6',
+  gray50: 'var(--surface-ground, #F9FAFB)',
+  gray100: 'var(--surface-border, #F3F4F6)',
   gray200: '#E5E7EB',
   gray300: '#D1D5DB',
   gray400: '#9CA3AF',
-  gray500: '#6B7280',
+  gray500: 'var(--text-secondary, #6B7280)',
   gray600: '#4B5563',
   gray700: '#374151',
   gray800: '#1F2937',
@@ -26,7 +26,7 @@ export const COLORS = {
   // Semánticos
   green: '#10B981',
   greenLight: '#D1FAE5',
-  blue: '#3B82F6',
+  blue: 'var(--secondary-color, #3B82F6)',
   blueLight: '#DBEAFE',
   yellow: '#F59E0B',
   yellowLight: '#FEF3C7',

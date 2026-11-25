@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks';
+import { useTenantConfig } from '@/context/TenantConfigContext';
 
 // ═══════════════════════════════════════════════════════════
 // PÁGINA DE LOGIN
@@ -10,6 +11,7 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = () => {
     const { login } = useAuth();
+    const { activeTenant } = useTenantConfig();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPwd, setShowPwd] = useState(false);
@@ -51,12 +53,12 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 <div className="auth-header">
                     <div className="auth-logo-wrap mb-3">
                         <img
-                            src="/logo-planifikt.png"
-                            alt="Planifikt Logo"
-                            style={{ width: '120px', height: 'auto', display: 'block', margin: '0 auto' }}
+                            src={activeTenant.logos.main}
+                            alt={`${activeTenant.name} Logo`}
+                            style={{ height: '50px', width: 'auto', display: 'block', margin: '0 auto', objectFit: 'contain' }}
                         />
                     </div>
-                    <h1>Planifikt CRM</h1>
+                    <h1>{activeTenant.title}</h1>
                     <p>Inicia sesión en tu cuenta</p>
                 </div>
 

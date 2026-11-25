@@ -17,7 +17,7 @@ interface BadgeProps {
 export const CustomBadge: React.FC<BadgeProps> = ({
   children,
   color = COLORS.white,
-  bg = COLORS.red,
+  bg = 'var(--primary-color, #E31E24)',
   className = ''
 }) => (
   <span
@@ -242,17 +242,17 @@ export const SectionTitle: React.FC<SectionTitleProps> = ({
 }) => (
   <div className="flex justify-content-between align-items-center mb-2">
     <div className="flex align-items-center gap-3" style={{ minHeight: '32px' }}>
-      {icon && <i className={`pi ${icon}`} style={{ color: COLORS.red, fontSize: '1.1rem' }} />}
+      {icon && <i className={`pi ${icon}`} style={{ color: 'var(--primary-color)', fontSize: '1.1rem' }} />}
       <span className="text-lg font-bold text-900" style={{ letterSpacing: '-0.3px', fontWeight: 800, lineHeight: 1 }}>{title}</span>
       {badge != null && (
-        <CustomBadge color={COLORS.red} bg={COLORS.redLight}>{badge}</CustomBadge>
+        <CustomBadge color="var(--primary-color)" bg="var(--primary-color-light)">{badge}</CustomBadge>
       )}
     </div>
     {action && (
       <button
         onClick={action}
         className="flex align-items-center gap-3 bg-transparent border-none cursor-pointer text-sm font-semibold p-0"
-        style={{ color: COLORS.red, lineHeight: 1 }}
+        style={{ color: 'var(--primary-color)', lineHeight: 1 }}
       >
         {actionLabel} <i className="pi pi-arrow-right" style={{ fontSize: '0.9rem' }} />
       </button>

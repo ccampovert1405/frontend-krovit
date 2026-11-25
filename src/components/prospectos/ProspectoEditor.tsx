@@ -18,7 +18,7 @@ interface EditarProspectoFullForm {
     nombre: string;
     apellido: string;
     empresa: string;
-    cargo: string;
+    cedula: string;
     email: string;
     telefono: string;
     celular: string;
@@ -42,9 +42,7 @@ interface EditarProspectoModalProps {
 
 export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ prospecto, visible, onHide, onSave }) => {
     const { user } = useAuth();
-    const isJefe = user?.rol === 'Jefe Comercial' || user?.rol === 'jefe' || user?.rol === 'Administrador' || user?.rol === 'Admin';
-
-    console.log(isJefe)
+    const isJefe = user?.rol === 'Jefe Comercial' || user?.rol === 'jefe' || user?.rol === 'Administrador' || user?.rol === 'Admin' || user?.rol === 'Gerente Comercial';
 
     const etapaOptions = ETAPAS_AIDA.map(e => ({ label: e, value: e }));
 
@@ -71,7 +69,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
         nombre: nombreInicial,
         apellido: apellidoInicial,
         empresa: prospecto.empresa || '',
-        cargo: prospecto.cargo || '',
+        cedula: prospecto.cedula || '',
         email: prospecto.email || '',
         telefono: prospecto.telefono || '',
         celular: prospecto.celular || '',
@@ -98,7 +96,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             nombre: form.nombre,
             apellido: form.apellido,
             empresa: form.empresa,
-            cargo: form.cargo,
+            cedula: form.cedula,
             email: form.email,
             telefono: form.telefono,
             celular: form.celular,
@@ -183,24 +181,24 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             {/* ── Información Personal ── */}
             <ModalSectionHeader icon="pi-user" title="Información Personal" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Nombre" required>
                         <InputText value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Nombre" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Apellido">
                         <InputText value={form.apellido} onChange={(e) => set('apellido', e.target.value)} placeholder="Apellido" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Empresa">
                         <InputText value={form.empresa} onChange={(e) => set('empresa', e.target.value)} placeholder="Empresa" />
                     </FormField>
                 </div>
-                <div className="col-6">
-                    <FormField label="Cargo">
-                        <InputText value={form.cargo} onChange={(e) => set('cargo', e.target.value)} placeholder="Cargo" />
+                <div className="col-12 md:col-6">
+                    <FormField label="Cédula">
+                        <InputText value={form.cedula} onChange={(e) => set('cedula', e.target.value)} placeholder="Número de identificación" />
                     </FormField>
                 </div>
             </div>
@@ -208,22 +206,22 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             {/* ── Datos de Contacto ── */}
             <ModalSectionHeader icon="pi-phone" title="Datos de Contacto" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Email" required>
                         <InputText value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="correo@ejemplo.com" type="email" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Teléfono" required>
                         <InputText value={form.telefono} onChange={(e) => set('telefono', e.target.value)} placeholder="+593 99 999 9999" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Celular">
                         <InputText value={form.celular} onChange={(e) => set('celular', e.target.value)} placeholder="+593 99 999 9999" />
                     </FormField>
                 </div>
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Ciudad">
                         <InputText value={form.ciudad} onChange={(e) => set('ciudad', e.target.value)} placeholder="Ciudad" />
                     </FormField>
@@ -233,7 +231,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
             {/* ── Estado ── */}
             <ModalSectionHeader icon="pi-chart-line" title="Estado" />
             <div className="grid">
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Etapa AIDA">
                         <Dropdown
                             value={form.etapa}
@@ -244,7 +242,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
                     </FormField>
                 </div>
 
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Categoría de Interés">
                         <Dropdown
                             value={form.producto}
@@ -258,7 +256,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
                     </FormField>
                 </div>
 
-                <div className="col-6">
+                <div className="col-12 md:col-6">
                     <FormField label="Fecha de creacion">
                         <Calendar
                             value={form.created_at ? new Date(form.created_at + 'T12:00:00') : null}
@@ -282,7 +280,7 @@ export const EditarProspectoModal: React.FC<EditarProspectoModalProps> = ({ pros
 
                 {/* Solo perfiles que sean Jefe Comercial pueden ver/editar el agente asignado */}
                 {isJefe && (
-                    <div className="col-6">
+                    <div className="col-12 md:col-6">
                         <FormField label="Agente">
                             <Dropdown
                                 value={form.user_create_id}

@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ═══════════════════════════════════════════════════════════
    ESTILOS GLOBALES - CRM
    ═══════════════════════════════════════════════════════════ */
@@ -20,11 +24,11 @@ body,
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-family, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #F9FAFB;
-  color: #1A1A1A;
+  background-color: var(--surface-ground, #F9FAFB);
+  color: var(--text-main, #1A1A1A);
 }
 
 /* ─── Scrollbar Personalizado ─── */
@@ -51,6 +55,12 @@ body {
 :root {
   /* Marca */
   --primary-color: #E31E24;
+  --primary-color-dark: #C41920;
+  --primary-color-light: #FEF2F2;
+  --primary-color-border: #FECACA;
+  --primary-color-shadow: rgba(227, 30, 36, 0.25);
+  --primary-color-shadow-hover: rgba(227, 30, 36, 0.35);
+  --primary-color-focus-shadow: rgba(227, 30, 36, 0.12);
   --primary-color-text: #ffffff;
 
   /* Neutros */
@@ -94,27 +104,27 @@ body {
 
 /* ─── Botón de marca (rojo CRM) ─── */
 .btn-brand.p-button {
-  background: #E31E24 !important;
-  border-color: #E31E24 !important;
+  background: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
   color: #fff !important;
   border-radius: 12px;
   padding: 12px 26px;
   font-size: 0.92rem;
   font-weight: 800;
-  box-shadow: 0 4px 15px rgba(227, 30, 36, 0.25);
+  box-shadow: 0 4px 15px var(--primary-color-shadow);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-brand.p-button:hover {
-  background: #C41920 !important;
-  border-color: #C41920 !important;
+  background: var(--primary-color-dark) !important;
+  border-color: var(--primary-color-dark) !important;
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(227, 30, 36, 0.35);
+  box-shadow: 0 8px 25px var(--primary-color-shadow-hover);
 }
 
 .btn-brand.p-button:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(227, 30, 36, 0.25);
+  box-shadow: 0 2px 8px var(--primary-color-shadow);
 }
 
 /* ─── Cards PrimeReact ─── */
@@ -146,8 +156,8 @@ body {
 }
 
 .p-inputtext:focus {
-  border-color: #E31E24 !important;
-  box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.12) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 3px var(--primary-color-focus-shadow) !important;
   outline: none !important;
 }
 
@@ -181,8 +191,8 @@ body {
 }
 
 .p-dropdown:not(.p-disabled).p-focus {
-  border-color: #E31E24 !important;
-  box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.12) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 3px var(--primary-color-focus-shadow) !important;
   outline: none;
 }
 
@@ -199,12 +209,12 @@ body {
 }
 
 .p-dropdown-item:hover {
-  background-color: #FEF2F2 !important;
-  color: #E31E24 !important;
+  background-color: var(--primary-color-light) !important;
+  color: var(--primary-color) !important;
 }
 
 .p-dropdown-item.p-highlight {
-  background-color: #E31E24 !important;
+  background-color: var(--primary-color) !important;
   color: white !important;
 }
 
@@ -237,8 +247,8 @@ body {
 }
 
 .p-multiselect:not(.p-disabled).p-focus {
-  border-color: #E31E24 !important;
-  box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.12) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 3px var(--primary-color-focus-shadow) !important;
   outline: none;
 }
 
@@ -249,8 +259,8 @@ body {
 }
 
 .p-multiselect-token {
-  background-color: #FEF2F2 !important;
-  color: #E31E24 !important;
+  background-color: var(--primary-color-light) !important;
+  color: var(--primary-color) !important;
   border-radius: 6px !important;
   font-weight: 600 !important;
   font-size: 0.75rem !important;
@@ -259,7 +269,7 @@ body {
 
 .p-multiselect-token-icon {
   margin-left: 4px !important;
-  color: #E31E24 !important;
+  color: var(--primary-color) !important;
   font-size: 0.7rem !important;
 }
 
@@ -292,7 +302,7 @@ body {
 }
 
 .p-progressbar .p-progressbar-value {
-  background: linear-gradient(90deg, #E31E24 0%, #C41920 100%);
+  background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-color-dark) 100%);
   border-radius: 4px;
 }
 
@@ -311,7 +321,7 @@ body {
 /* ─── Checkbox styling ─── */
 input[type="checkbox"] {
   cursor: pointer;
-  accent-color: #E31E24;
+  accent-color: var(--primary-color);
 }
 
 /* ─── Transiciones suaves (solo inputs y cards) ─── */
@@ -375,7 +385,7 @@ input[type="checkbox"] {
 .topbar__logo-text {
   font-size: 1rem;
   font-weight: 900;
-  color: #E31E24;
+  color: var(--primary-color);
   letter-spacing: -0.5px;
 }
 
@@ -704,7 +714,7 @@ input[type="checkbox"] {
 }
 
 .datatable-premium.p-datatable-hoverable-rows .p-datatable-tbody>tr:hover {
-  background-color: #FEF2F2 !important;
+  background-color: var(--primary-color-light) !important;
 }
 
 /* Striped rows premium */
@@ -728,7 +738,7 @@ input[type="checkbox"] {
 }
 
 .datatable-premium .p-paginator .p-paginator-pages .p-paginator-page.p-highlight {
-  background: #E31E24 !important;
+  background: var(--primary-color) !important;
   color: #ffffff !important;
 }
 
@@ -749,7 +759,8 @@ input[type="checkbox"] {
 
 /* Reset de margin para iconos que deben estar centrados */
 .icon-no-margin .pi,
-.icon-box-standard .pi {
+.icon-box-standard .pi,
+.p-button-icon-only .pi {
   margin: 0 !important;
 }
 
@@ -760,4 +771,62 @@ input[type="checkbox"] {
 
 .shadow-premium:hover {
   box-shadow: 0 15px 50px rgba(0,0,0,0.08) !important;
+}
+
+/* Badge de Notificaciones Premium */
+.notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  transform: translate(25%, -25%);
+  background-color: var(--primary-color);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 2px 6px var(--primary-color-shadow);
+  z-index: 10;
+}
+
+/* ─── Scroll wrapper for responsive Tables ─── */
+.p-datatable-wrapper {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Sidebar & Layout transitions ─── */
+.sidebar-overlay {
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.topbar {
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.app-main {
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Hide desktop toggle on mobile devices */
+@media (max-width: 768px) {
+  .topbar__hamburger-desktop {
+    display: none !important;
+  }
+}
+
+/* Resolve conflict between TailwindCSS and PrimeFlex .grid class */
+.grid {
+  display: flex !important;
+}
+
+/* Force white text color for filled PrimeReact buttons to prevent Tailwind base inheritance override */
+.p-button:not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
+  color: #ffffff !important;
 }
